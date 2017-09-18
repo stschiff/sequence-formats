@@ -33,7 +33,7 @@ type SitePattern = [Int]
 showSitePattern :: SitePattern -> String
 showSitePattern nVec = intercalate "," . map show $ nVec
 
-showHistogram :: RareAlleleHistogram -> Either String T.Text
+showHistogram :: RareAlleleHistogram -> Either T.Text T.Text
 showHistogram hist = do
     assertErr "can only print histogram with minAf=1 due to format-legacy" $ raMinAf hist == 1
     assertErr "can only print histogram with no conditioning due to format-legacy" $
