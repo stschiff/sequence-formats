@@ -10,10 +10,13 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     SequenceFormats.RareAlleleHistogram,
-                       SequenceFormats.FreqSum
+                       SequenceFormats.FreqSum,
+                       SequenceFormats.Fasta,
+                       SequenceFormats.VCF
   hs-source-dirs:      src
   build-depends:       base, containers, errors, text, attoparsec, pipes,
-                       pipes-text, transformers, turtle,
+                       pipes-text, transformers, turtle, bytestring, lens-family,
+                       pipes-bytestring,
                        pipes-attoparsec, vector, data-memocombinators, split, MissingH, hslogger
   default-language:    Haskell2010
   ghc-options:         -O
