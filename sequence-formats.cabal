@@ -1,5 +1,5 @@
 name:                sequence-formats
-version:             1.0.2
+version:             1.0.3
 license:             GPL-3
 license-file:        LICENSE
 author:              Stephan Schiffels
@@ -12,7 +12,8 @@ library
   exposed-modules:     SequenceFormats.RareAlleleHistogram,
                        SequenceFormats.FreqSum,
                        SequenceFormats.Fasta,
-                       SequenceFormats.VCF
+                       SequenceFormats.VCF,
+                       SequenceFormats.Eigenstrat
   hs-source-dirs:      src
   build-depends:       base, containers, errors, text, attoparsec, pipes,
                        pipes-text, transformers, turtle, bytestring, lens-family,
