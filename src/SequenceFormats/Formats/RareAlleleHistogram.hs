@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Rarecoal.Formats.RareAlleleHistogram (RareAlleleHistogram(..), readHistogramFromHandle,
+module SequenceFormats.RareAlleleHistogram (RareAlleleHistogram(..), readHistogramFromHandle,
                             SitePattern, readHistogram, showHistogram, showSitePattern) where
 
 import Control.Applicative (optional)
