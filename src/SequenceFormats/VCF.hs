@@ -13,18 +13,19 @@ module SequenceFormats.VCF (VCFheader(..),
                      isBiallelicSnp,
                      liftParsingErrors) where
 
+import Utils (consumeProducer, liftParsingErrors)
+
 import Control.Applicative ((<|>), empty)
 import Control.Error (headErr)
-import Control.Exception.Base (throwIO, AssertionFailed(..))
+import Control.Exception.Base (AssertionFailed(..))
 import Control.Monad (void)
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.Class (lift)
+import Control.Monad.Catch (MonadThrow, throwM)
 import Control.Monad.Trans.State.Strict (runStateT)
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isSpace)
 import Data.Text (Text, count, unpack, append, splitOn)
 import Pipes (Producer, next)
-import Pipes.Attoparsec (parse, parsed, ParsingError(..))
+import Pipes.Attoparsec (parse)
 
 data VCFheader = VCFheader {
     vcfHeaderComments :: [Text],
@@ -52,26 +53,17 @@ data SimpleVCFentry = SimpleVCFentry {
     sVCFdosages :: [Maybe Int]
 } deriving (Show)
 
-readVCF :: (MonadIO m) => Producer Text m () -> m (VCFheader, Producer VCFentry m ())
+readVCF :: (MonadThrow m) => Producer Text m () -> m (VCFheader, Producer VCFentry m ())
 readVCF prod = do
     (res, rest) <- runStateT (parse vcfHeaderParser) prod
     header <- case res of
-        Nothing -> liftIO . throwIO $ AssertionFailed "vcf header not readible. VCF file empty?"
+        Nothing -> throwM $ AssertionFailed "vcf header not readible. VCF file empty?"
         Just (Left e_) -> do
             Right (chunk, _) <- next rest
             let msg = show e_ ++ unpack chunk
-            liftIO . throwIO $ AssertionFailed ("VCF header parsing error: " ++ msg)
+            throwM $ AssertionFailed ("VCF header parsing error: " ++ msg)
         Just (Right h) -> return h
-    return (header, parsed vcfEntryParser rest >>= liftParsingErrors)
-
-liftParsingErrors :: (MonadIO m) => Either (ParsingError, Producer Text m r) () -> Producer a m ()
-liftParsingErrors res = case res of
-    Left (e_, prod_) -> do
-        Right (chunk, _) <- lift $ next prod_
-        let msg = "encountered parsing error: " ++ show e_ ++ "\n" ++
-                unpack chunk
-        lift . liftIO . throwIO $ AssertionFailed msg
-    Right () -> return ()
+    return (header, consumeProducer vcfEntryParser rest)
 
 vcfHeaderParser :: A.Parser VCFheader
 vcfHeaderParser = VCFheader <$> A.many1' doubleCommentLine <*> singleCommentLine

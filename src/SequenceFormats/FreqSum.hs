@@ -1,21 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module SequenceFormats.FreqSum (parseFreqSum, FreqSumEntry(..), FreqSumHeader(..), printFreqSum, liftErrors) where
+module SequenceFormats.FreqSum (parseFreqSum, FreqSumEntry(..), FreqSumHeader(..), printFreqSum) where
 
-import Control.Error (Script, throwE)
+import Utils (consumeProducer)
+
+import Control.Monad.Catch (MonadThrow, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.State.Strict (runStateT)
-import Control.Monad.Trans.Class (lift)
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isAlphaNum)
 import Data.List (intercalate)
-import Data.Text (unpack, Text)
-import Pipes (Producer, next, runEffect, (>->))
-import Pipes.Attoparsec (parse, parsed, ParsingError)
+import Data.Text (unpack)
+import Pipes (Producer, runEffect, (>->))
+import Pipes.Attoparsec (parse, ParsingError(..))
 import qualified Pipes.Prelude as P
 import qualified Pipes.Text.IO as PT
 import System.IO (Handle)
-import Turtle.Format (format, w, s, (%))
 
 data FreqSumHeader = FreqSumHeader {
     fshNames :: [String],
@@ -39,26 +39,15 @@ instance Show FreqSumEntry where
     show (FreqSumEntry chrom pos ref alt counts) =
         intercalate "\t" [show chrom, show pos, [ref], [alt], intercalate "\t" . map show $ counts]
 
-parseFreqSum :: Handle -> Script (FreqSumHeader, Producer FreqSumEntry Script ())
+parseFreqSum :: (MonadThrow m, MonadIO m) => Handle -> m (FreqSumHeader, Producer FreqSumEntry m ())
 parseFreqSum handle = do
     let prod = PT.fromHandle handle
     (res, rest) <- runStateT (parse parseFreqSumHeader) prod
     header <- case res of
-        Nothing -> throwE "freqSum file exhausted"
-        Just (Left e) -> do
-            Right (chunk, _) <- next rest
-            let msg = format (w%"\n"%s) e chunk
-            throwE msg
+        Nothing -> throwM $ ParsingError [] "freqSum file exhausted"
+        Just (Left e) -> throwM e
         Just (Right h) -> return h
-    return (header, parsed parseFreqSumEntry rest >>= liftErrors)
-
-liftErrors :: Either (ParsingError, Producer Text Script r) () -> Producer a Script ()
-liftErrors res = case res of
-    Left (e, prod) -> do
-        Right (chunk, _) <- lift $ next prod
-        let msg = format (w%"\n"%s) e chunk
-        lift . throwE $ msg
-    Right () -> return ()
+    return (header, consumeProducer parseFreqSumEntry rest)
 
 parseFreqSumHeader :: A.Parser FreqSumHeader
 parseFreqSumHeader = do
@@ -76,7 +65,7 @@ parseFreqSumEntry = FreqSumEntry <$> A.decimal <* A.skipSpace <*> A.decimal <* A
   where
     counts = (A.signed A.decimal) `A.sepBy` A.char '\t'
 
-printFreqSum :: MonadIO io => (FreqSumHeader, Producer FreqSumEntry io ()) -> io ()
+printFreqSum :: MonadIO m => (FreqSumHeader, Producer FreqSumEntry m ()) -> m ()
 printFreqSum (fsh, prod) = do
     liftIO . print $ fsh
     runEffect $ prod >-> P.map show >-> P.stdoutLn

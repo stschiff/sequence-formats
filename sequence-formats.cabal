@@ -14,10 +14,11 @@ library
                        SequenceFormats.Fasta,
                        SequenceFormats.VCF,
                        SequenceFormats.Eigenstrat
+  other-modules:       Utils
   hs-source-dirs:      src
   build-depends:       base, containers, errors, text, attoparsec, pipes,
                        pipes-text, transformers, turtle, bytestring, lens-family,
-                       pipes-bytestring,
+                       pipes-bytestring, foldl, exceptions,
                        pipes-attoparsec, vector, data-memocombinators, split, MissingH, hslogger
   default-language:    Haskell2010
   ghc-options:         -O
