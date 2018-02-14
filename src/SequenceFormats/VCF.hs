@@ -13,7 +13,7 @@ module SequenceFormats.VCF (VCFheader(..),
                      isBiallelicSnp,
                      liftParsingErrors) where
 
-import Utils (consumeProducer, liftParsingErrors)
+import SequenceFormats.Utils (consumeProducer, liftParsingErrors)
 
 import Control.Applicative ((<|>), empty)
 import Control.Error (headErr)

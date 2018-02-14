@@ -2,7 +2,7 @@
 
 module SequenceFormats.FreqSum (parseFreqSum, FreqSumEntry(..), FreqSumHeader(..), printFreqSum) where
 
-import Utils (consumeProducer)
+import SequenceFormats.Utils (consumeProducer)
 
 import Control.Monad.Catch (MonadThrow, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)

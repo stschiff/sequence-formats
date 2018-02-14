@@ -13,8 +13,8 @@ library
                        SequenceFormats.FreqSum,
                        SequenceFormats.Fasta,
                        SequenceFormats.VCF,
-                       SequenceFormats.Eigenstrat
-  other-modules:       Utils
+                       SequenceFormats.Eigenstrat,
+                       SequenceFormats.Utils
   hs-source-dirs:      src
   build-depends:       base, containers, errors, text, attoparsec, pipes,
                        pipes-text, transformers, turtle, bytestring, lens-family,

@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Utils (liftParsingErrors, consumeProducer) where
+module SequenceFormats.Utils (liftParsingErrors, consumeProducer) where
 
 import Control.Monad.Catch (MonadThrow, throwM)
 import Data.Text (Text)

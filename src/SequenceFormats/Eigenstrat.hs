@@ -2,19 +2,22 @@
 
 module SequenceFormats.Eigenstrat (EigenstratSnpEntry(..), EigenstratIndEntry(..), 
     eigenstratSnpParser, 
-    eigenstratGenoParser, eigenstratIndParser, readEigenstratInd, GenoEntry(..), GenoLine) where
+    eigenstratGenoParser, eigenstratIndParser, readEigenstratInd, GenoEntry(..), GenoLine,
+    streamEigenstratGeno, streamEigenstratSnp) where
 
-import Utils (consumeProducer)
+import SequenceFormats.Utils (consumeProducer)
 
 import Control.Applicative ((<|>))
 import Control.Monad (void)
+import Control.Monad.Catch (MonadThrow)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isSpace)
 import qualified Data.Text as T
+import Pipes (Producer)
 import Pipes.Prelude (toListM)
 import Pipes.Text.IO (fromHandle)
-import System.IO (withFile, IOMode(..))
+import System.IO (withFile, IOMode(..), Handle)
 
 data EigenstratSnpEntry = EigenstratSnpEntry T.Text Int Char Char deriving (Show)
     -- Chrom Pos Ref Alt
@@ -80,3 +83,9 @@ eigenstratGenoParser = do
             _ -> error "this should never happen"
   where
     isValidNum c = c == '0' || c == '1' || c == '2' || c == '9'
+
+streamEigenstratGeno :: (MonadThrow m, MonadIO m) => Handle -> Producer GenoLine m ()
+streamEigenstratGeno handle = consumeProducer eigenstratGenoParser (fromHandle handle)
+
+streamEigenstratSnp :: (MonadThrow m, MonadIO m) => Handle -> Producer EigenstratSnpEntry m ()
+streamEigenstratSnp handle = consumeProducer eigenstratSnpParser (fromHandle handle)
