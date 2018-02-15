@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module SequenceFormats.FreqSum (parseFreqSum, FreqSumEntry(..), FreqSumHeader(..), printFreqSum) where
+module SequenceFormats.FreqSum (readFreqSumStdIn, readFreqSumFile, FreqSumEntry(..),  
+    FreqSumHeader(..), printFreqSum) where
 
 import SequenceFormats.Utils (consumeProducer)
 
@@ -10,12 +11,12 @@ import Control.Monad.Trans.State.Strict (runStateT)
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isAlphaNum)
 import Data.List (intercalate)
-import Data.Text (unpack)
+import Data.Text (unpack, Text)
 import Pipes (Producer, runEffect, (>->))
 import Pipes.Attoparsec (parse, ParsingError(..))
 import qualified Pipes.Prelude as P
+import Pipes.Safe (MonadSafe)
 import qualified Pipes.Text.IO as PT
-import System.IO (Handle)
 
 data FreqSumHeader = FreqSumHeader {
     fshNames :: [String],
@@ -39,15 +40,21 @@ instance Show FreqSumEntry where
     show (FreqSumEntry chrom pos ref alt counts) =
         intercalate "\t" [show chrom, show pos, [ref], [alt], intercalate "\t" . map show $ counts]
 
-parseFreqSum :: (MonadThrow m, MonadIO m) => Handle -> m (FreqSumHeader, Producer FreqSumEntry m ())
-parseFreqSum handle = do
-    let prod = PT.fromHandle handle
+readFreqSumProd :: (MonadThrow m) =>
+    Producer Text m () -> m (FreqSumHeader, Producer FreqSumEntry m ())
+readFreqSumProd prod = do
     (res, rest) <- runStateT (parse parseFreqSumHeader) prod
     header <- case res of
         Nothing -> throwM $ ParsingError [] "freqSum file exhausted"
         Just (Left e) -> throwM e
         Just (Right h) -> return h
     return (header, consumeProducer parseFreqSumEntry rest)
+
+readFreqSumStdIn :: (MonadIO m, MonadThrow m) => m (FreqSumHeader, Producer FreqSumEntry m ())
+readFreqSumStdIn = readFreqSumProd (PT.stdin)
+
+readFreqSumFile :: (MonadSafe m) => FilePath -> m (FreqSumHeader, Producer FreqSumEntry m ())
+readFreqSumFile = readFreqSumProd . PT.readFile
 
 parseFreqSumHeader :: A.Parser FreqSumHeader
 parseFreqSumHeader = do
