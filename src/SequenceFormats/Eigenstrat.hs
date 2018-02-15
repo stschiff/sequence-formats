@@ -20,7 +20,7 @@ import qualified Pipes.Text.IO as PT
 import System.IO (withFile, IOMode(..))
 import Turtle (format, w, d, (%))
 
-data EigenstratSnpEntry = EigenstratSnpEntry Int Int Char Char deriving (Show)
+data EigenstratSnpEntry = EigenstratSnpEntry T.Text Int Char Char deriving (Show)
     -- Chrom Pos Ref Alt
 data EigenstratIndEntry = EigenstratIndEntry T.Text Sex T.Text deriving (Show)
 data Sex = Male | Female | Unknown deriving (Show)
@@ -33,7 +33,7 @@ eigenstratSnpParser = do
     A.skipMany A.space
     void word
     A.skipMany1 A.space
-    chrom <- A.decimal
+    chrom <- word
     A.skipMany1 A.space
     void word
     A.skipMany1 A.space
