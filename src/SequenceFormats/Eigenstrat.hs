@@ -3,28 +3,30 @@
 module SequenceFormats.Eigenstrat (EigenstratSnpEntry(..), EigenstratIndEntry(..), 
     eigenstratSnpParser, 
     eigenstratGenoParser, eigenstratIndParser, readEigenstratInd, GenoEntry(..), GenoLine,
-    streamEigenstratGeno, streamEigenstratSnp) where
+    streamEigenstratSnp, readEigenstrat) where
 
-import SequenceFormats.Utils (consumeProducer)
+import SequenceFormats.Utils (consumeProducer, FormatException(..))
 
 import Control.Applicative ((<|>))
 import Control.Monad (void)
-import Control.Monad.Catch (MonadThrow)
+import Control.Monad.Catch (MonadThrow, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isSpace)
 import qualified Data.Text as T
-import Pipes (Producer)
-import Pipes.Prelude (toListM)
-import Pipes.Text.IO (fromHandle)
+import Pipes (Producer, Pipe, (>->), for, cat, yield)
+import Pipes.Safe (MonadSafe)
+import qualified Pipes.Prelude as P
+import qualified Pipes.Text.IO as PT
 import System.IO (withFile, IOMode(..), Handle)
+import Turtle (format, w, d, (%))
 
-data EigenstratSnpEntry = EigenstratSnpEntry T.Text Int Char Char deriving (Show)
+data EigenstratSnpEntry = EigenstratSnpEntry Int Int Char Char deriving (Show)
     -- Chrom Pos Ref Alt
 data EigenstratIndEntry = EigenstratIndEntry T.Text Sex T.Text deriving (Show)
 data Sex = Male | Female | Unknown deriving (Show)
 
-data GenoEntry = HomRef | Het | HomAlt | Missing
+data GenoEntry = HomRef | Het | HomAlt | Missing deriving (Show)
 type GenoLine = [GenoEntry]
 
 eigenstratSnpParser :: A.Parser EigenstratSnpEntry
@@ -32,7 +34,7 @@ eigenstratSnpParser = do
     A.skipMany A.space
     void word
     A.skipMany1 A.space
-    chrom <- word
+    chrom <- A.decimal
     A.skipMany1 A.space
     void word
     A.skipMany1 A.space
@@ -67,7 +69,7 @@ parseSex = parseMale <|> parseFemale <|> parseUnknown
 readEigenstratInd :: (MonadIO m) => FilePath -> m [EigenstratIndEntry]
 readEigenstratInd fn = do
     liftIO . withFile fn ReadMode $ \handle -> do
-        toListM $ consumeProducer eigenstratIndParser (fromHandle handle)
+        P.toListM $ consumeProducer eigenstratIndParser (PT.fromHandle handle)
 
 eigenstratGenoParser :: A.Parser GenoLine
 eigenstratGenoParser = do
@@ -84,8 +86,25 @@ eigenstratGenoParser = do
   where
     isValidNum c = c == '0' || c == '1' || c == '2' || c == '9'
 
-streamEigenstratGeno :: (MonadThrow m, MonadIO m) => Handle -> Producer GenoLine m ()
-streamEigenstratGeno handle = consumeProducer eigenstratGenoParser (fromHandle handle)
-
 streamEigenstratSnp :: (MonadThrow m, MonadIO m) => Handle -> Producer EigenstratSnpEntry m ()
-streamEigenstratSnp handle = consumeProducer eigenstratSnpParser (fromHandle handle)
+streamEigenstratSnp handle = consumeProducer eigenstratSnpParser (PT.fromHandle handle)
+
+readEigenstrat :: (MonadSafe m) => FilePath -> FilePath -> FilePath ->
+    m ([EigenstratIndEntry], Producer (EigenstratSnpEntry, GenoLine) m ())
+readEigenstrat genoFile snpFile indFile = do
+    indEntries <- readEigenstratInd indFile
+    let snpProd = consumeProducer eigenstratSnpParser (PT.readFile snpFile)
+        genoProd = consumeProducer eigenstratGenoParser (PT.readFile genoFile) >-> 
+            validateEigenstratEntries (length indEntries)
+    return (indEntries, P.zip snpProd genoProd)
+
+validateEigenstratEntries :: (MonadThrow m) => Int -> Pipe GenoLine GenoLine m ()
+validateEigenstratEntries nr = for cat $ \line -> do
+    if length line /= nr
+    then do
+        let msg = format ("inconsistent nr of genotypes ("%d%", but should be "%d%") in genotype line "%w) (length line) nr line
+        throwM $ FormatException msg
+    else
+        yield line
+
+

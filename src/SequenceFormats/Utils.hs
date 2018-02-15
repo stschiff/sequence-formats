@@ -1,11 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
-module SequenceFormats.Utils (liftParsingErrors, consumeProducer) where
+module SequenceFormats.Utils (liftParsingErrors, consumeProducer, FormatException(..)) where
 
+import Control.Exception (Exception)
 import Control.Monad.Catch (MonadThrow, throwM)
 import Data.Text (Text)
+import qualified Data.Attoparsec.Text as A
 import Pipes (Producer)
 import Pipes.Attoparsec (ParsingError(..), parsed)
-import qualified Data.Attoparsec.Text as A
+
+data FormatException = FormatException Text
+    deriving Show
+
+instance Exception FormatException
 
 liftParsingErrors :: (MonadThrow m) =>
     Either (ParsingError, Producer Text m r) () -> Producer a m ()
