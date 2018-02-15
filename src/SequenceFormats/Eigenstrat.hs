@@ -1,9 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module SequenceFormats.Eigenstrat (EigenstratSnpEntry(..), EigenstratIndEntry(..), 
-    eigenstratSnpParser, 
-    eigenstratGenoParser, eigenstratIndParser, readEigenstratInd, GenoEntry(..), GenoLine,
-    streamEigenstratSnp, readEigenstrat) where
+    readEigenstratInd, GenoEntry(..), GenoLine,
+    readEigenstratSnpStdIn, readEigenstratSnpFile, readEigenstrat) where
 
 import SequenceFormats.Utils (consumeProducer, FormatException(..))
 
@@ -18,7 +17,7 @@ import Pipes (Producer, Pipe, (>->), for, cat, yield)
 import Pipes.Safe (MonadSafe)
 import qualified Pipes.Prelude as P
 import qualified Pipes.Text.IO as PT
-import System.IO (withFile, IOMode(..), Handle)
+import System.IO (withFile, IOMode(..))
 import Turtle (format, w, d, (%))
 
 data EigenstratSnpEntry = EigenstratSnpEntry Int Int Char Char deriving (Show)
@@ -86,14 +85,17 @@ eigenstratGenoParser = do
   where
     isValidNum c = c == '0' || c == '1' || c == '2' || c == '9'
 
-streamEigenstratSnp :: (MonadThrow m, MonadIO m) => Handle -> Producer EigenstratSnpEntry m ()
-streamEigenstratSnp handle = consumeProducer eigenstratSnpParser (PT.fromHandle handle)
+readEigenstratSnpStdIn :: (MonadThrow m, MonadIO m) => Producer EigenstratSnpEntry m ()
+readEigenstratSnpStdIn = consumeProducer eigenstratSnpParser PT.stdin
+
+readEigenstratSnpFile :: (MonadSafe m) => FilePath -> Producer EigenstratSnpEntry m ()
+readEigenstratSnpFile = consumeProducer eigenstratSnpParser . PT.readFile
 
 readEigenstrat :: (MonadSafe m) => FilePath -> FilePath -> FilePath ->
     m ([EigenstratIndEntry], Producer (EigenstratSnpEntry, GenoLine) m ())
 readEigenstrat genoFile snpFile indFile = do
     indEntries <- readEigenstratInd indFile
-    let snpProd = consumeProducer eigenstratSnpParser (PT.readFile snpFile)
+    let snpProd = readEigenstratSnpFile snpFile
         genoProd = consumeProducer eigenstratGenoParser (PT.readFile genoFile) >-> 
             validateEigenstratEntries (length indEntries)
     return (indEntries, P.zip snpProd genoProd)

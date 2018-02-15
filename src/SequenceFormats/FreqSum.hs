@@ -51,7 +51,7 @@ readFreqSumProd prod = do
     return (header, consumeProducer parseFreqSumEntry rest)
 
 readFreqSumStdIn :: (MonadIO m, MonadThrow m) => m (FreqSumHeader, Producer FreqSumEntry m ())
-readFreqSumStdIn = readFreqSumProd (PT.stdin)
+readFreqSumStdIn = readFreqSumProd PT.stdin
 
 readFreqSumFile :: (MonadSafe m) => FilePath -> m (FreqSumHeader, Producer FreqSumEntry m ())
 readFreqSumFile = readFreqSumProd . PT.readFile
