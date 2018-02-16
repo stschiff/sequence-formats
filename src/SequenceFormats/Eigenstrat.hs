@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module SequenceFormats.Eigenstrat (EigenstratSnpEntry(..), EigenstratIndEntry(..), 
-    readEigenstratInd, GenoEntry(..), GenoLine,
+    readEigenstratInd, GenoEntry(..), GenoLine, Sex(..), 
     readEigenstratSnpStdIn, readEigenstratSnpFile, readEigenstrat, writeEigenstrat) where
 
 import SequenceFormats.Utils (consumeProducer, FormatException(..))
