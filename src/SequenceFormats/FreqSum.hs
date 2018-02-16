@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module SequenceFormats.FreqSum (readFreqSumStdIn, readFreqSumFile, FreqSumEntry(..),  
-    FreqSumHeader(..), printFreqSum) where
+    FreqSumHeader(..), printFreqSumStdOut, printFreqSumFile) where
 
 import SequenceFormats.Utils (consumeProducer)
 
@@ -10,12 +10,16 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.State.Strict (runStateT)
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isAlphaNum, isSpace)
-import Data.Text (unpack, Text, intercalate, singleton)
-import Pipes (Producer, runEffect, (>->))
+import Data.Text (Text, intercalate, singleton)
+import Data.Text.IO (putStr, hPutStr)
+import Pipes (Producer, (>->), Consumer)
 import Pipes.Attoparsec (parse, ParsingError(..))
 import qualified Pipes.Prelude as P
 import Pipes.Safe (MonadSafe)
+import Pipes.Safe.Prelude (withFile)
 import qualified Pipes.Text.IO as PT
+import Prelude hiding (putStr)
+import System.IO (IOMode(..))
 import Turtle (format, s, d, (%))
 
 data FreqSumHeader = FreqSumHeader {
@@ -23,11 +27,11 @@ data FreqSumHeader = FreqSumHeader {
     fshCounts :: [Int]
 } deriving (Eq)
 
-instance Show FreqSumHeader where
-    show (FreqSumHeader names nCounts) =
-        unpack $ format ("#CHROM\tPOS\tREF\tALT\t"%s) (intercalate "\t" tuples)
-      where
-        tuples = zipWith (\n c -> format (s%"("%d%")") n c) names nCounts
+freqSumHeaderToText :: FreqSumHeader -> Text
+freqSumHeaderToText (FreqSumHeader names nCounts) =
+    format ("#CHROM\tPOS\tREF\tALT\t"%s%"\n") (intercalate "\t" tuples)
+  where
+    tuples = zipWith (\n c -> format (s%"("%d%")") n c) names nCounts
 
 data FreqSumEntry = FreqSumEntry {
     fsChrom  :: Text,
@@ -37,12 +41,11 @@ data FreqSumEntry = FreqSumEntry {
     fsCounts :: [Int]
 }
 
-instance Show FreqSumEntry where
-    show (FreqSumEntry chrom pos ref alt counts) =
-        unpack $ format (s%"\t"%d%"\t"%s%"\t"%s%"\t"%s) chrom pos (singleton ref) (singleton alt) 
-            countStr 
-      where
-        countStr = intercalate "\t" (map (format d) counts)
+freqSumEntryToText :: FreqSumEntry -> Text
+freqSumEntryToText (FreqSumEntry chrom pos ref alt counts) =
+    format (s%"\t"%d%"\t"%s%"\t"%s%"\t"%s%"\n") chrom pos (singleton ref) (singleton alt) countStr 
+  where
+    countStr = intercalate "\t" (map (format d) counts)
 
 readFreqSumProd :: (MonadThrow m) =>
     Producer Text m () -> m (FreqSumHeader, Producer FreqSumEntry m ())
@@ -75,7 +78,13 @@ parseFreqSumEntry = FreqSumEntry <$> A.takeTill isSpace <* A.skipSpace <*> A.dec
   where
     counts = (A.signed A.decimal) `A.sepBy` A.char '\t'
 
-printFreqSum :: MonadIO m => (FreqSumHeader, Producer FreqSumEntry m ()) -> m ()
-printFreqSum (fsh, prod) = do
-    liftIO . print $ fsh
-    runEffect $ prod >-> P.map show >-> P.stdoutLn
+printFreqSumStdOut :: (MonadIO m) => FreqSumHeader -> Consumer FreqSumEntry m ()
+printFreqSumStdOut fsh = do
+    liftIO . putStr . freqSumHeaderToText $ fsh
+    P.map freqSumEntryToText >-> PT.stdout
+
+printFreqSumFile :: (MonadSafe m) => FilePath -> FreqSumHeader -> Consumer FreqSumEntry m ()
+printFreqSumFile outFile fsh = do
+    outFileH <- withFile outFile WriteMode return
+    liftIO . hPutStr outFileH . freqSumHeaderToText $ fsh
+    P.map freqSumEntryToText >-> PT.toHandle outFileH

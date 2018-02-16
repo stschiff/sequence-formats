@@ -39,9 +39,9 @@ eigenstratSnpParser = do
     A.skipMany1 A.space
     pos <- A.decimal
     A.skipMany1 A.space
-    ref <- A.satisfy (A.inClass "ACTGX")
+    ref <- A.satisfy (A.inClass "ACTGN")
     A.skipMany1 A.space
-    alt <- A.satisfy (A.inClass "ACTGX")
+    alt <- A.satisfy (A.inClass "ACTG")
     void A.endOfLine
     return $ EigenstratSnpEntry chrom pos ref alt
 
@@ -104,9 +104,8 @@ validateEigenstratEntries :: (MonadThrow m) => Int -> Pipe GenoLine GenoLine m (
 validateEigenstratEntries nr = for cat $ \line -> do
     if length line /= nr
     then do
-        let msg = format ("inconsistent nr of genotypes ("%d%", but should be "%d%") in genotype line "%w) (length line) nr line
+        let msg = format ("inconsistent nr of genotypes ("%d%", but should be "%d%") in \
+                \genotype line "%w) (length line) nr line
         throwM $ FormatException msg
     else
         yield line
-
-

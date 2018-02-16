@@ -10,10 +10,9 @@ module SequenceFormats.VCF (VCFheader(..),
                      getDosages,
                      isTransversionSnp,
                      makeSimpleVCFentry,
-                     isBiallelicSnp,
-                     liftParsingErrors) where
+                     isBiallelicSnp) where
 
-import SequenceFormats.Utils (consumeProducer, liftParsingErrors)
+import SequenceFormats.Utils (consumeProducer)
 
 import Control.Applicative ((<|>), empty)
 import Control.Error (headErr)
