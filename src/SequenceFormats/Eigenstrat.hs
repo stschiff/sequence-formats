@@ -2,23 +2,25 @@
 
 module SequenceFormats.Eigenstrat (EigenstratSnpEntry(..), EigenstratIndEntry(..), 
     readEigenstratInd, GenoEntry(..), GenoLine,
-    readEigenstratSnpStdIn, readEigenstratSnpFile, readEigenstrat) where
+    readEigenstratSnpStdIn, readEigenstratSnpFile, readEigenstrat, writeEigenstrat) where
 
 import SequenceFormats.Utils (consumeProducer, FormatException(..))
 
 import Control.Applicative ((<|>))
-import Control.Monad (void)
+import Control.Monad (void, forM_)
 import Control.Monad.Catch (MonadThrow, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isSpace)
+import Data.Vector (Vector, fromList, toList)
 import qualified Data.Text as T
-import Pipes (Producer, Pipe, (>->), for, cat, yield)
+import qualified Data.Text.IO as T
+import Pipes (Producer, Pipe, (>->), for, cat, yield, Consumer)
 import Pipes.Safe (MonadSafe)
 import qualified Pipes.Prelude as P
 import qualified Pipes.Text.IO as PT
 import System.IO (withFile, IOMode(..))
-import Turtle (format, w, d, (%))
+import Turtle (format, w, d, (%), s)
 
 data EigenstratSnpEntry = EigenstratSnpEntry T.Text Int Char Char deriving (Show)
     -- Chrom Pos Ref Alt
@@ -26,7 +28,7 @@ data EigenstratIndEntry = EigenstratIndEntry T.Text Sex T.Text deriving (Show)
 data Sex = Male | Female | Unknown deriving (Show)
 
 data GenoEntry = HomRef | Het | HomAlt | Missing deriving (Show)
-type GenoLine = [GenoEntry]
+type GenoLine = Vector GenoEntry
 
 eigenstratSnpParser :: A.Parser EigenstratSnpEntry
 eigenstratSnpParser = do
@@ -74,7 +76,7 @@ eigenstratGenoParser :: A.Parser GenoLine
 eigenstratGenoParser = do
     line <- A.takeWhile1 isValidNum
     void A.endOfLine
-    return $ do
+    return . fromList $ do
         l <- T.unpack line
         case l of
             '0' -> return HomAlt
@@ -109,3 +111,34 @@ validateEigenstratEntries nr = for cat $ \line -> do
         throwM $ FormatException msg
     else
         yield line
+
+writeEigenstrat :: (MonadSafe m) => FilePath -> FilePath -> FilePath -> [EigenstratIndEntry] -> 
+    Consumer (EigenstratSnpEntry, GenoLine) m ()
+writeEigenstrat genoFile snpFile indFile indEntries = do
+    liftIO $ writeEigenstratIndFile indFile indEntries
+    snpOutH <- liftIO $ withFile snpFile WriteMode return
+    genoOutH <- liftIO $ withFile genoFile WriteMode return
+    for cat $ \(EigenstratSnpEntry chrom pos ref alt, genoLine) -> do
+        let n = format (s%"_"%d) chrom pos
+            snpLine = format (s%"\t"%s%"\t0\t"%d%"\t"%s%"\t"%s) n chrom pos
+                (T.singleton ref) (T.singleton alt)
+            genoLineStr = T.concat . map (format d . toEigenStratNum) . toList $ genoLine
+        liftIO . T.hPutStrLn snpOutH $ snpLine
+        liftIO . T.hPutStrLn genoOutH $ genoLineStr
+  where
+    toEigenStratNum c = case c of
+        HomRef -> 2 :: Int
+        Het -> 1
+        HomAlt -> 0
+        Missing -> 9
+
+writeEigenstratIndFile :: (MonadIO m) => FilePath -> [EigenstratIndEntry] -> m ()
+writeEigenstratIndFile f indEntries = do
+    liftIO . withFile f WriteMode $ \h -> do
+        forM_ indEntries $ \(EigenstratIndEntry name sex popName) -> do
+            liftIO . T.hPutStrLn h $ format (s%"\t"%s%"\t"%s) name (sexToStr sex) popName
+  where
+    sexToStr sex = case sex of
+        Male -> "M"
+        Female -> "F"
+        Unknown -> "U"
