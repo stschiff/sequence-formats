@@ -17,7 +17,6 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Pipes (Producer, Pipe, (>->), for, cat, yield, Consumer)
 import Pipes.Safe (MonadSafe)
-import qualified Pipes.Safe.Prelude as PS
 import qualified Pipes.Prelude as P
 import qualified Pipes.Text.IO as PT
 import System.IO (withFile, IOMode(..))
@@ -113,19 +112,19 @@ validateEigenstratEntries nr = for cat $ \line -> do
     else
         yield line
 
-writeEigenstrat :: (MonadSafe m, MonadIO m) => FilePath -> FilePath -> FilePath -> 
+writeEigenstrat :: (MonadSafe m) => FilePath -> FilePath -> FilePath -> 
     [EigenstratIndEntry] -> Consumer (EigenstratSnpEntry, GenoLine) m ()
 writeEigenstrat genoFile snpFile indFile indEntries = do
     liftIO $ writeEigenstratIndFile indFile indEntries
-    snpOutH <- PS.withFile snpFile WriteMode return
-    genoOutH <- PS.withFile genoFile WriteMode return
-    for cat $ \(EigenstratSnpEntry chrom pos ref alt, genoLine) -> do
-        let n = format (s%"_"%d) chrom pos
-            snpLine = format (s%"\t"%s%"\t0\t"%d%"\t"%s%"\t"%s) n chrom pos
-                (T.singleton ref) (T.singleton alt)
-            genoLineStr = T.concat . map (format d . toEigenStratNum) . toList $ genoLine
-        liftIO . T.hPutStrLn snpOutH $ snpLine
-        liftIO . T.hPutStrLn genoOutH $ genoLineStr
+    let snpOutTextConsumer = PT.writeFile snpFile
+        genoOutTextConsumer = PT.writeFile genoFile
+        toTextPipe = P.map (\(EigenstratSnpEntry chrom pos ref alt, genoLine) ->
+            let n = format (s%"_"%d) chrom pos
+                snpLine = format (s%"\t"%s%"\t0\t"%d%"\t"%s%"\t"%s%"\n") n chrom pos
+                    (T.singleton ref) (T.singleton alt)
+                genoLineStr = T.concat . map (format d . toEigenStratNum) . toList $ genoLine
+            in  (snpLine, format (s%"\n") genoLineStr))
+    toTextPipe >-> P.tee (P.map fst >-> snpOutTextConsumer) >-> P.map snd >-> genoOutTextConsumer
   where
     toEigenStratNum c = case c of
         HomRef -> 2 :: Int
