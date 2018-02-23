@@ -5,6 +5,7 @@ module SequenceFormats.FreqSum (readFreqSumStdIn, readFreqSumFile, FreqSumEntry(
 
 import SequenceFormats.Utils (consumeProducer)
 
+import Control.Applicative ((<|>))
 import Control.Monad.Catch (MonadThrow, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.State.Strict (runStateT)
@@ -38,14 +39,16 @@ data FreqSumEntry = FreqSumEntry {
     fsPos    :: Int,
     fsRef    :: Char,
     fsAlt    :: Char,
-    fsCounts :: [Int]
+    fsCounts :: [Maybe Int]
 }
 
 freqSumEntryToText :: FreqSumEntry -> Text
-freqSumEntryToText (FreqSumEntry chrom pos ref alt counts) =
+freqSumEntryToText (FreqSumEntry chrom pos ref alt maybeCounts) =
     format (s%"\t"%d%"\t"%s%"\t"%s%"\t"%s%"\n") chrom pos (singleton ref) (singleton alt) countStr 
   where
-    countStr = intercalate "\t" (map (format d) counts)
+    countStr = intercalate "\t" . map (format d . convertToNum) $ maybeCounts 
+    convertToNum Nothing = -1
+    convertToNum (Just a) = a
 
 readFreqSumProd :: (MonadThrow m) =>
     Producer Text m () -> m (FreqSumHeader, Producer FreqSumEntry m ())
@@ -76,7 +79,9 @@ parseFreqSumEntry :: A.Parser FreqSumEntry
 parseFreqSumEntry = FreqSumEntry <$> A.takeTill isSpace <* A.skipSpace <*> A.decimal <*
     A.skipSpace <*> A.letter <* A.skipSpace <*> A.letter <* A.skipSpace <*> counts <* A.endOfLine
   where
-    counts = (A.signed A.decimal) `A.sepBy` A.char '\t'
+    counts = (parseMissing <|> parseCount) `A.sepBy` A.char '\t'
+    parseMissing = A.string "-1" *> pure Nothing
+    parseCount = Just <$> A.decimal
 
 printFreqSumStdOut :: (MonadIO m) => FreqSumHeader -> Consumer FreqSumEntry m ()
 printFreqSumStdOut fsh = do

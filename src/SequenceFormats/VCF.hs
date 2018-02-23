@@ -8,10 +8,11 @@ module SequenceFormats.VCF (VCFheader(..),
                      getGenotypes,
                      getDosages,
                      isTransversionSnp,
-                     makeSimpleVCFentry,
+                     vcfToFreqSumEntry,
                      isBiallelicSnp) where
 
 import SequenceFormats.Utils (consumeProducer)
+import SequenceFormats.FreqSum (FreqSumEntry(..))
 
 import Control.Applicative ((<|>), empty)
 import Control.Error (headErr, assertErr)
@@ -140,13 +141,13 @@ getDosages vcfEntry = do
                 return . Just $ T.count "1" gen
     return dosages
 
-makeSimpleVCFentry :: VCFentry -> Either String SimpleVCFentry
-makeSimpleVCFentry vcfEntry = do
+vcfToFreqSumEntry :: VCFentry -> Either String FreqSumEntry
+vcfToFreqSumEntry vcfEntry = do
     dosages <- getDosages vcfEntry
     assertErr "multi-site reference allele" $ T.length (vcfRef vcfEntry) == 1
     let ref = T.head (vcfRef vcfEntry)
     assertErr "need exactly one alternative allele" $ length (vcfAlt vcfEntry) == 1
     assertErr "multi-site alternative allele" $ T.length (head . vcfAlt $ vcfEntry) == 1
     let alt = T.head . head . vcfAlt $ vcfEntry
-    return $ SimpleVCFentry (vcfChrom vcfEntry) (vcfPos vcfEntry) ref alt dosages
+    return $ FreqSumEntry (vcfChrom vcfEntry) (vcfPos vcfEntry) ref alt dosages
     
