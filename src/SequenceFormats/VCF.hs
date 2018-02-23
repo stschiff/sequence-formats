@@ -3,9 +3,8 @@
 module SequenceFormats.VCF (VCFheader(..),
                      VCFentry(..),
                      SimpleVCFentry(..),
-                     readVCF,
-                     vcfHeaderParser,
-                     vcfEntryParser,
+                     readVCFfromStdIn,
+                     readVCFfromFile,
                      getGenotypes,
                      getDosages,
                      isTransversionSnp,
@@ -16,15 +15,17 @@ import SequenceFormats.Utils (consumeProducer)
 
 import Control.Applicative ((<|>), empty)
 import Control.Error (headErr)
-import Control.Exception.Base (AssertionFailed(..))
 import Control.Monad (void)
 import Control.Monad.Catch (MonadThrow, throwM)
 import Control.Monad.Trans.State.Strict (runStateT)
+import Control.Monad.IO.Class (MonadIO)
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isSpace)
 import Data.Text (Text, count, unpack, append, splitOn)
-import Pipes (Producer, next)
-import Pipes.Attoparsec (parse)
+import Pipes (Producer)
+import Pipes.Attoparsec (parse, ParsingError(..))
+import Pipes.Safe (MonadSafe)
+import qualified Pipes.Text.IO as PT
 
 data VCFheader = VCFheader {
     vcfHeaderComments :: [Text],
@@ -52,17 +53,21 @@ data SimpleVCFentry = SimpleVCFentry {
     sVCFdosages :: [Maybe Int]
 } deriving (Show)
 
-readVCF :: (MonadThrow m) => Producer Text m () -> m (VCFheader, Producer VCFentry m ())
-readVCF prod = do
+readVCFfromProd :: (MonadThrow m) =>
+    Producer Text m () -> m (VCFheader, Producer VCFentry m ())
+readVCFfromProd prod = do
     (res, rest) <- runStateT (parse vcfHeaderParser) prod
     header <- case res of
-        Nothing -> throwM $ AssertionFailed "vcf header not readible. VCF file empty?"
-        Just (Left e_) -> do
-            Right (chunk, _) <- next rest
-            let msg = show e_ ++ unpack chunk
-            throwM $ AssertionFailed ("VCF header parsing error: " ++ msg)
+        Nothing -> throwM $ ParsingError [] "freqSum file exhausted"
+        Just (Left e) -> throwM e
         Just (Right h) -> return h
     return (header, consumeProducer vcfEntryParser rest)
+
+readVCFfromStdIn :: (MonadIO m, MonadThrow m) => m (VCFheader, Producer VCFentry m ())
+readVCFfromStdIn = readVCFfromProd PT.stdin
+
+readVCFfromFile :: (MonadSafe m) => FilePath -> m (VCFheader, Producer VCFentry m ())
+readVCFfromFile = readVCFfromProd . PT.readFile
 
 vcfHeaderParser :: A.Parser VCFheader
 vcfHeaderParser = VCFheader <$> A.many1' doubleCommentLine <*> singleCommentLine
