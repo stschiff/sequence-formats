@@ -2,7 +2,6 @@
 
 module SequenceFormats.VCF (VCFheader(..),
                      VCFentry(..),
-                     SimpleVCFentry(..),
                      readVCFfromStdIn,
                      readVCFfromFile,
                      getGenotypes,
@@ -46,14 +45,6 @@ data VCFentry = VCFentry {
     vcfInfo :: [Text],
     vcfFormatString :: [Text],
     vcfGenotypeInfo :: [[Text]]
-} deriving (Show)
-
-data SimpleVCFentry = SimpleVCFentry {
-    sVCFchrom :: Text,
-    sVCFpos :: Int,
-    sVCFref :: Char,
-    sVCFalt :: Char,
-    sVCFdosages :: [Maybe Int]
 } deriving (Show)
 
 readVCFfromProd :: (MonadThrow m) =>
