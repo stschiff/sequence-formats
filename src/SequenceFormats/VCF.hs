@@ -14,18 +14,20 @@ module SequenceFormats.VCF (VCFheader(..),
 import SequenceFormats.Utils (consumeProducer)
 
 import Control.Applicative ((<|>), empty)
-import Control.Error (headErr)
+import Control.Error (headErr, assertErr)
 import Control.Monad (void)
 import Control.Monad.Catch (MonadThrow, throwM)
 import Control.Monad.Trans.State.Strict (runStateT)
 import Control.Monad.IO.Class (MonadIO)
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isSpace)
-import Data.Text (Text, count, unpack, append, splitOn)
+import qualified Data.Text as T
 import Pipes (Producer)
 import Pipes.Attoparsec (parse, ParsingError(..))
 import Pipes.Safe (MonadSafe)
 import qualified Pipes.Text.IO as PT
+
+type Text = T.Text
 
 data VCFheader = VCFheader {
     vcfHeaderComments :: [Text],
@@ -48,8 +50,8 @@ data VCFentry = VCFentry {
 data SimpleVCFentry = SimpleVCFentry {
     sVCFchrom :: Text,
     sVCFpos :: Int,
-    sVCFref :: Text,
-    sVCFalt :: [Text],
+    sVCFref :: Char,
+    sVCFalt :: Char,
     sVCFdosages :: [Maybe Int]
 } deriving (Show)
 
@@ -76,12 +78,12 @@ vcfHeaderParser = VCFheader <$> A.many1' doubleCommentLine <*> singleCommentLine
         c1 <- A.string "##"
         s_ <- A.takeWhile1 (not . A.isEndOfLine)
         A.endOfLine
-        return $ append c1 s_
+        return $ T.append c1 s_
     singleCommentLine = do
         void $ A.char '#'
         s_ <- A.takeWhile1 (not . A.isEndOfLine)
         A.endOfLine
-        let fields = splitOn "\t" s_
+        let fields = T.splitOn "\t" s_
         return . drop 9 $ fields
 
 vcfEntryParser :: A.Parser VCFentry
@@ -132,15 +134,19 @@ getDosages vcfEntry = do
     genotypes <- getGenotypes vcfEntry
     let dosages = do
             gen <- genotypes
-            if '.' `elem` (unpack gen) then
+            if '.' `elem` (T.unpack gen) then
                 return Nothing
             else
-                return . Just $ count "1" gen
+                return . Just $ T.count "1" gen
     return dosages
 
 makeSimpleVCFentry :: VCFentry -> Either String SimpleVCFentry
 makeSimpleVCFentry vcfEntry = do
     dosages <- getDosages vcfEntry
-    return $ SimpleVCFentry (vcfChrom vcfEntry) (vcfPos vcfEntry) (vcfRef vcfEntry)
-                            (vcfAlt vcfEntry) dosages
+    assertErr "multi-site reference allele" $ T.length (vcfRef vcfEntry) == 1
+    let ref = T.head (vcfRef vcfEntry)
+    assertErr "need exactly one alternative allele" $ length (vcfAlt vcfEntry) == 1
+    assertErr "multi-site alternative allele" $ T.length (head . vcfAlt $ vcfEntry) == 1
+    let alt = T.head . head . vcfAlt $ vcfEntry
+    return $ SimpleVCFentry (vcfChrom vcfEntry) (vcfPos vcfEntry) ref alt dosages
     
