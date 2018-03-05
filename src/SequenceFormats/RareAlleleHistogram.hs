@@ -18,7 +18,7 @@ import System.IO (Handle, openFile, IOMode(..), hClose)
 import Turtle.Format ((%), w, format)
 
 data RareAlleleHistogram = RareAlleleHistogram {
-    raNames :: [String],
+    raNames :: [T.Text],
     raNVec :: [Int],
     raMinAf :: Int,
     raMaxAf :: Int,
@@ -40,7 +40,7 @@ showHistogram hist = do
         null (raConditionOn hist)
     assertErr "can only print histogram with no exclude pattern due to format-legacy" $
         null (raExcludePatterns hist)
-    let head0 = T.concat ["NAMES=", T.pack . intercalate "," . raNames $ hist]
+    let head0 = T.concat ["NAMES=", T.intercalate "," . raNames $ hist]
         head1 = T.concat ["N=", T.pack . intercalate "," . map show . raNVec $ hist]
         head2 = T.concat ["MAX_M=", T.pack . show . raMaxAf $ hist]
         head3 = T.concat ["TOTAL_SITES=", T.pack . show . raTotalNrSites $ hist]
@@ -73,7 +73,7 @@ readHistogramFromHandle handle = do
 
 parseHistogram :: A.Parser RareAlleleHistogram
 parseHistogram = do
-    names <- map T.unpack <$> parseNames
+    names <- parseNames
     nVec <- parseNVec
     maxM <- parseMaxM
     totalNrSites <- parseTotalNrSites
