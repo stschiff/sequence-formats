@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module SequenceFormats.FreqSum (readFreqSumStdIn, readFreqSumFile, FreqSumEntry(..),  
-    FreqSumHeader(..), printFreqSumStdOut, printFreqSumFile) where
+    FreqSumHeader(..), printFreqSumStdOut, printFreqSumFile, freqSumEntryToText) where
 
 import SequenceFormats.Utils (consumeProducer)
 
