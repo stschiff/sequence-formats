@@ -22,7 +22,7 @@ import qualified Pipes.Text.IO as PT
 import System.IO (withFile, IOMode(..))
 import Turtle (format, w, d, (%), s)
 
-data EigenstratSnpEntry = EigenstratSnpEntry T.Text Int Char Char deriving (Show)
+data EigenstratSnpEntry = EigenstratSnpEntry T.Text Int Char Char deriving (Eq, Show)
     -- Chrom Pos Ref Alt
 data EigenstratIndEntry = EigenstratIndEntry T.Text Sex T.Text deriving (Show)
 data Sex = Male | Female | Unknown deriving (Show)
