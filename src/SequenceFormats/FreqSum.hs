@@ -77,11 +77,13 @@ parseFreqSumHeader = do
 
 parseFreqSumEntry :: A.Parser FreqSumEntry
 parseFreqSumEntry = FreqSumEntry <$> A.takeTill isSpace <* A.skipSpace <*> A.decimal <*
-    A.skipSpace <*> A.letter <* A.skipSpace <*> A.letter <* A.skipSpace <*> counts <* A.endOfLine
+    A.skipSpace <*> base <* A.skipSpace <*> baseOrDot <* A.skipSpace <*> counts <* A.endOfLine
   where
     counts = (parseMissing <|> parseCount) `A.sepBy` A.char '\t'
     parseMissing = A.string "-1" *> pure Nothing
     parseCount = Just <$> A.decimal
+    base = A.satisfy (A.inClass "ACTG")
+    baseOrDot = A.satisfy (A.inClass "ACTG.")
 
 printFreqSumStdOut :: (MonadIO m) => FreqSumHeader -> Consumer FreqSumEntry m ()
 printFreqSumStdOut fsh = do
