@@ -52,6 +52,7 @@ word = A.takeTill isSpace
 
 eigenstratIndParser :: A.Parser EigenstratIndEntry
 eigenstratIndParser = do
+    A.skipMany A.space
     name <- word
     A.skipMany1 A.space
     sex <- parseSex
