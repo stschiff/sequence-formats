@@ -136,9 +136,11 @@ vcfToFreqSumEntry :: VCFentry -> Either String FreqSumEntry
 vcfToFreqSumEntry vcfEntry = do
     dosages <- getDosages vcfEntry
     assertErr "multi-site reference allele" $ T.length (vcfRef vcfEntry) == 1
-    let ref = T.head (vcfRef vcfEntry)
     assertErr "need exactly one alternative allele" $ length (vcfAlt vcfEntry) == 1
     assertErr "multi-site alternative allele" $ T.length (head . vcfAlt $ vcfEntry) == 1
+    let ref = T.head (vcfRef vcfEntry)
     let alt = T.head . head . vcfAlt $ vcfEntry
+    assertErr "Invalid Reference Allele" $ ref `elem` ['A', 'C', 'T', 'G']
+    assertErr "Invalid Alternative Allele" $ alt `elem` ['A', 'C', 'T', 'G']
     return $ FreqSumEntry (vcfChrom vcfEntry) (vcfPos vcfEntry) ref alt dosages
     
