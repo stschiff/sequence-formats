@@ -3,7 +3,7 @@
 module SequenceFormats.FreqSum (readFreqSumStdIn, readFreqSumFile, FreqSumEntry(..),  
     FreqSumHeader(..), printFreqSumStdOut, printFreqSumFile, freqSumEntryToText) where
 
-import SequenceFormats.Utils (consumeProducer)
+import SequenceFormats.Utils (consumeProducer, Chrom(..))
 
 import Control.Applicative ((<|>))
 import Control.Monad.Catch (MonadThrow, throwM)
@@ -35,7 +35,7 @@ freqSumHeaderToText (FreqSumHeader names nCounts) =
     tuples = zipWith (\n c -> format (s%"("%d%")") n c) names nCounts
 
 data FreqSumEntry = FreqSumEntry {
-    fsChrom  :: Text,
+    fsChrom  :: Chrom,
     fsPos    :: Int,
     fsRef    :: Char,
     fsAlt    :: Char,
@@ -44,7 +44,8 @@ data FreqSumEntry = FreqSumEntry {
 
 freqSumEntryToText :: FreqSumEntry -> Text
 freqSumEntryToText (FreqSumEntry chrom pos ref alt maybeCounts) =
-    format (s%"\t"%d%"\t"%s%"\t"%s%"\t"%s%"\n") chrom pos (singleton ref) (singleton alt) countStr 
+    format (s%"\t"%d%"\t"%s%"\t"%s%"\t"%s%"\n") (unChrom chrom) pos (singleton ref) (singleton alt) 
+        countStr 
   where
     countStr = intercalate "\t" . map (format d . convertToNum) $ maybeCounts 
     convertToNum Nothing = -1
@@ -76,7 +77,7 @@ parseFreqSumHeader = do
     tuple = (,) <$> A.takeWhile (\c -> isAlphaNum c || c == '_' || c == '-') <* A.char '(' <*> A.decimal <* A.char ')'
 
 parseFreqSumEntry :: A.Parser FreqSumEntry
-parseFreqSumEntry = FreqSumEntry <$> A.takeTill isSpace <* A.skipSpace <*> A.decimal <*
+parseFreqSumEntry = FreqSumEntry <$> (Chrom <$> A.takeTill isSpace) <* A.skipSpace <*> A.decimal <*
     A.skipSpace <*> base <* A.skipSpace <*> baseOrDot <* A.skipSpace <*> counts <* A.endOfLine
   where
     counts = (parseMissing <|> parseCount) `A.sepBy` A.char '\t'

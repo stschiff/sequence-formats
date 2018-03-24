@@ -4,7 +4,7 @@ module SequenceFormats.Eigenstrat (EigenstratSnpEntry(..), EigenstratIndEntry(..
     readEigenstratInd, GenoEntry(..), GenoLine, Sex(..), 
     readEigenstratSnpStdIn, readEigenstratSnpFile, readEigenstrat, writeEigenstrat) where
 
-import SequenceFormats.Utils (consumeProducer, FormatException(..))
+import SequenceFormats.Utils (consumeProducer, FormatException(..), Chrom(..))
 
 import Control.Applicative ((<|>))
 import Control.Monad (void, forM_)
@@ -22,7 +22,7 @@ import qualified Pipes.Text.IO as PT
 import System.IO (withFile, IOMode(..))
 import Turtle (format, w, d, (%), s)
 
-data EigenstratSnpEntry = EigenstratSnpEntry T.Text Int Char Char deriving (Eq, Show)
+data EigenstratSnpEntry = EigenstratSnpEntry Chrom Int Char Char deriving (Eq, Show)
     -- Chrom Pos Ref Alt
 data EigenstratIndEntry = EigenstratIndEntry T.Text Sex T.Text deriving (Show)
 data Sex = Male | Female | Unknown deriving (Show)
@@ -45,7 +45,7 @@ eigenstratSnpParser = do
     A.skipMany1 A.space
     alt <- A.satisfy (A.inClass "ACTG")
     void A.endOfLine
-    return $ EigenstratSnpEntry chrom pos ref alt
+    return $ EigenstratSnpEntry (Chrom chrom) pos ref alt
 
 word :: A.Parser T.Text
 word = A.takeTill isSpace
@@ -120,8 +120,8 @@ writeEigenstrat genoFile snpFile indFile indEntries = do
     let snpOutTextConsumer = PT.writeFile snpFile
         genoOutTextConsumer = PT.writeFile genoFile
         toTextPipe = P.map (\(EigenstratSnpEntry chrom pos ref alt, genoLine) ->
-            let n = format (s%"_"%d) chrom pos
-                snpLine = format (s%"\t"%s%"\t0\t"%d%"\t"%s%"\t"%s%"\n") n chrom pos
+            let n = format (s%"_"%d) (unChrom chrom) pos
+                snpLine = format (s%"\t"%s%"\t0\t"%d%"\t"%s%"\t"%s%"\n") n (unChrom chrom) pos
                     (T.singleton ref) (T.singleton alt)
                 genoLineStr = T.concat . map (format d . toEigenStratNum) . toList $ genoLine
             in  (snpLine, format (s%"\n") genoLineStr))

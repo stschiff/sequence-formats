@@ -10,7 +10,7 @@ module SequenceFormats.VCF (VCFheader(..),
                      vcfToFreqSumEntry,
                      isBiallelicSnp) where
 
-import SequenceFormats.Utils (consumeProducer)
+import SequenceFormats.Utils (consumeProducer, Chrom(..))
 import SequenceFormats.FreqSum (FreqSumEntry(..))
 
 import Control.Applicative ((<|>), empty)
@@ -35,7 +35,7 @@ data VCFheader = VCFheader {
 } deriving (Show)
 
 data VCFentry = VCFentry {
-    vcfChrom :: Text,
+    vcfChrom :: Chrom,
     vcfPos :: Int,
     vcfId :: Maybe Text,
     vcfRef :: Text,
@@ -79,10 +79,9 @@ vcfHeaderParser = VCFheader <$> A.many1' doubleCommentLine <*> singleCommentLine
         return . drop 9 $ fields
 
 vcfEntryParser :: A.Parser VCFentry
-vcfEntryParser = VCFentry <$> word <* sp <*> A.decimal <* sp <*> parseId <* sp <*> word <* sp <*>
-                              parseAlternativeAlleles <* sp <*> A.double <* sp <*>
-                              parseFilter <* sp <*> parseInfoFields <* sp <*>
-                              parseFormatStrings <* sp <*> parseGenotypeInfos <* A.endOfLine
+vcfEntryParser = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> parseId <* sp <*>
+    word <* sp <*> parseAlternativeAlleles <* sp <*> A.double <* sp <*> parseFilter <* sp <*> 
+    parseInfoFields <* sp <*> parseFormatStrings <* sp <*> parseGenotypeInfos <* A.endOfLine
   where
     word = A.takeTill A.isHorizontalSpace
     sp = A.satisfy A.isHorizontalSpace
