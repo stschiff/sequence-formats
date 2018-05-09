@@ -41,7 +41,7 @@ eigenstratSnpParser = do
     A.skipMany1 A.space
     pos <- A.decimal
     A.skipMany1 A.space
-    ref <- A.satisfy (A.inClass "ACTG")
+    ref <- A.satisfy (A.inClass "ACTGN")
     A.skipMany1 A.space
     alt <- A.satisfy (A.inClass "ACTG")
     void A.endOfLine

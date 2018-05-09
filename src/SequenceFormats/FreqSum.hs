@@ -83,7 +83,7 @@ parseFreqSumEntry = FreqSumEntry <$> (Chrom <$> A.takeTill isSpace) <* A.skipSpa
     counts = (parseMissing <|> parseCount) `A.sepBy` A.char '\t'
     parseMissing = A.string "-1" *> pure Nothing
     parseCount = Just <$> A.decimal
-    base = A.satisfy (A.inClass "ACTG")
+    base = A.satisfy (A.inClass "ACTGN")
     baseOrDot = A.satisfy (A.inClass "ACTG.")
 
 printFreqSumStdOut :: (MonadIO m) => FreqSumHeader -> Consumer FreqSumEntry m ()
