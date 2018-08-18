@@ -27,7 +27,7 @@ data EigenstratSnpEntry = EigenstratSnpEntry Chrom Int Char Char deriving (Eq, S
 data EigenstratIndEntry = EigenstratIndEntry T.Text Sex T.Text deriving (Show)
 data Sex = Male | Female | Unknown deriving (Show)
 
-data GenoEntry = HomRef | Het | HomAlt | Missing deriving (Show)
+data GenoEntry = HomRef | Het | HomAlt | Missing deriving (Eq, Show)
 type GenoLine = Vector GenoEntry
 
 eigenstratSnpParser :: A.Parser EigenstratSnpEntry
