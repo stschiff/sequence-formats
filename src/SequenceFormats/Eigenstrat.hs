@@ -43,7 +43,7 @@ eigenstratSnpParser = do
     A.skipMany1 A.space
     ref <- A.satisfy (A.inClass "ACTGN")
     A.skipMany1 A.space
-    alt <- A.satisfy (A.inClass "ACTG")
+    alt <- A.satisfy (A.inClass "ACTGX")
     void A.endOfLine
     return $ EigenstratSnpEntry (Chrom chrom) pos ref alt
 
