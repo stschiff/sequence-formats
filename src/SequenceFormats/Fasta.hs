@@ -1,5 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+{-| Module to read and parse through a Fasta file. The Fasta format is defined here:
+<https://en.wikipedia.org/wiki/FASTA_format>
+-}
 module SequenceFormats.Fasta (readNextFastaEntry, loadFastaChrom) where
 
 import SequenceFormats.Utils (Chrom(..))
@@ -22,6 +25,9 @@ import Turtle.Format (format, (%), s)
 import Turtle.Prelude (err)
 import Turtle.Line (unsafeTextToLine)
 
+-- |A function to select out a specific chromosome from a Fasta File. Expects a file handle to the 
+-- file and a chromosome. Note that by Chromosome I simply denote a fasta header line, as is the 
+-- case for example for the human reference genome. Returns a Bytestring-Producer over the single sequence followed the specified header (the chromosome).
 loadFastaChrom :: Handle -> Chrom -> IO (Producer B.ByteString IO ())
 loadFastaChrom refFileHandle chrom = do
     let prod = P.fromHandle refFileHandle
@@ -36,6 +42,7 @@ loadFastaChrom refFileHandle chrom = do
             newProd <- runEffect $ prod' >-> drain
             go newProd
 
+-- |This function takes a Bytestring-Producer over a Fasta-file, reads in the first header and then returns a produer over its sequence. The return of that producer is the Bytestring-Producer of the rest of the fasta file.
 readNextFastaEntry :: (MonadIO m) => Producer B.ByteString m () ->
                       m (Chrom, Producer B.ByteString m (Producer B.ByteString m ()))
 readNextFastaEntry prod = do

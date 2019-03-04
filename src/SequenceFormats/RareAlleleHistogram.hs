@@ -1,5 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+{-| A module to read and write allele sharing histograms, as defined here:
+<https://rarecoal-docs.readthedocs.io/en/latest/rarecoal.html#histogram-files>
+-}
+
 module SequenceFormats.RareAlleleHistogram (RareAlleleHistogram(..), readHistogramFromHandle,
                             SitePattern, readHistogram, showHistogram, showSitePattern) where
 
@@ -17,22 +21,31 @@ import qualified Pipes.Text.IO as PT
 import System.IO (Handle, openFile, IOMode(..), hClose)
 import Turtle.Format ((%), w, format)
 
+-- |A datatype to represent an Allele Sharing Histogram:
 data RareAlleleHistogram = RareAlleleHistogram {
-    raNames :: [T.Text],
-    raNVec :: [Int],
-    raMinAf :: Int,
-    raMaxAf :: Int,
-    raConditionOn :: [Int],
-    raExcludePatterns :: [SitePattern],
-    raTotalNrSites :: Int64,
-    raCounts :: Map.Map SitePattern Int64,
-    raJackknifeEstimates :: Maybe (Map.Map SitePattern (Double, Double))
+    raNames :: [T.Text], -- ^A list of branch names
+    raNVec :: [Int], -- ^A list of haploid sample sizes.
+    raMinAf :: Int, -- ^The minimum allele count
+    raMaxAf :: Int, -- ^The maximum allele count
+    raConditionOn :: [Int], -- ^A list of branch indices that were used to condition the allele 
+                            --sharing pattern
+    raExcludePatterns :: [SitePattern], -- ^A list of patterns that are excluded.
+    raTotalNrSites :: Int64, -- ^The total number of non-missing sites in the genome.
+    raCounts :: Map.Map SitePattern Int64, -- ^The actual data, a dictionary from allele sharing patterns to observed numbers.
+    raJackknifeEstimates :: Maybe (Map.Map SitePattern (Double, Double)) -- ^An optional dictionary that contains Jackknife estimates and standard deviations for each pattern frequency.
 }
 
+-- |A simple type synonym for the SitePattern, represented as a list of Integers that represents 
+-- each pattern across the branches.
 type SitePattern = [Int]
+
+-- |A simple function to convert a pattern into a String.
 showSitePattern :: SitePattern -> String
 showSitePattern nVec = intercalate "," . map show $ nVec
 
+-- |Function to convert a Rare Allele Histogram to text. Returns an error if attempting to print a 
+-- histogram with non-standard settings. Many settings, such as minAf>1, are only meant for 
+-- in-memory representations, but are not compatible with the file format itself.
 showHistogram :: RareAlleleHistogram -> Either T.Text T.Text
 showHistogram hist = do
     assertErr "can only print histogram with minAf=1 due to format-legacy" $ raMinAf hist == 1
@@ -56,6 +69,7 @@ showHistogram hist = do
   where
     sorted = sortBy (\(_, v1) (_, v2)  -> compare v2 v1) $ Map.toList (raCounts hist)
 
+-- |Read a histogram from a FilePath
 readHistogram :: FilePath -> Script RareAlleleHistogram
 readHistogram path = do
     h <- scriptIO $ openFile path ReadMode
@@ -63,6 +77,7 @@ readHistogram path = do
     scriptIO $ hClose h
     return hist
 
+-- |Read a histogram from a File Handle.
 readHistogramFromHandle :: Handle -> Script RareAlleleHistogram
 readHistogramFromHandle handle = do
     res <- evalStateT (parse parseHistogram) . PT.fromHandle $ handle

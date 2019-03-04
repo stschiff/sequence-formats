@@ -1,5 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+{-| Module to parse and write freqSum files. The freqsum format is defined here:
+<https://rarecoal-docs.readthedocs.io/en/latest/rarecoal-tools.html#vcf2freqsum>
+-}
+
 module SequenceFormats.FreqSum (readFreqSumStdIn, readFreqSumFile, FreqSumEntry(..),  
     FreqSumHeader(..), printFreqSumStdOut, printFreqSumFile, freqSumEntryToText) where
 
@@ -23,9 +27,10 @@ import Prelude hiding (putStr)
 import System.IO (IOMode(..))
 import Turtle (format, s, d, (%))
 
+-- |A Datatype representing the Header
 data FreqSumHeader = FreqSumHeader {
-    fshNames :: [Text],
-    fshCounts :: [Int]
+    fshNames :: [Text], -- ^A list of individual or group names
+    fshCounts :: [Int] -- ^A list of haplotype counts per individual/group.
 } deriving (Eq)
 
 freqSumHeaderToText :: FreqSumHeader -> Text
@@ -34,14 +39,16 @@ freqSumHeaderToText (FreqSumHeader names nCounts) =
   where
     tuples = zipWith (\n c -> format (s%"("%d%")") n c) names nCounts
 
+-- |A Datatype to denote a single freqSum line
 data FreqSumEntry = FreqSumEntry {
-    fsChrom  :: Chrom,
-    fsPos    :: Int,
-    fsRef    :: Char,
-    fsAlt    :: Char,
-    fsCounts :: [Maybe Int]
+    fsChrom  :: Chrom, -- ^The chromosome of the site
+    fsPos    :: Int, -- ^The position of the site
+    fsRef    :: Char, -- ^The reference allele
+    fsAlt    :: Char, -- ^The alternative allele
+    fsCounts :: [Maybe Int] -- ^A list of allele counts in each group. Nothing denotes missing data.
 }
 
+-- |This function converts a single freqSum entry to a printable freqSum line.
 freqSumEntryToText :: FreqSumEntry -> Text
 freqSumEntryToText (FreqSumEntry chrom pos ref alt maybeCounts) =
     format (s%"\t"%d%"\t"%s%"\t"%s%"\t"%s%"\n") (unChrom chrom) pos (singleton ref) (singleton alt) 
@@ -61,9 +68,11 @@ readFreqSumProd prod = do
         Just (Right h) -> return h
     return (header, consumeProducer parseFreqSumEntry rest)
 
+-- |A function to read a freqsum file from StdIn. Returns a pair of a freqSum Header and a Producer over all lines.
 readFreqSumStdIn :: (MonadIO m, MonadThrow m) => m (FreqSumHeader, Producer FreqSumEntry m ())
 readFreqSumStdIn = readFreqSumProd PT.stdin
 
+-- |A function to read a freqsum file from a file. Returns a pair of a freqSum Header and a Producer over all lines.
 readFreqSumFile :: (MonadSafe m) => FilePath -> m (FreqSumHeader, Producer FreqSumEntry m ())
 readFreqSumFile = readFreqSumProd . PT.readFile
 
@@ -86,11 +95,13 @@ parseFreqSumEntry = FreqSumEntry <$> (Chrom <$> A.takeTill isSpace) <* A.skipSpa
     base = A.satisfy (A.inClass "ACTGN")
     baseOrDot = A.satisfy (A.inClass "ACTG.")
 
+-- |A function to write freqSum data to StdOut. Expects the freqSum header as argument, and then returns a Consumer that accepts freqSum entries.
 printFreqSumStdOut :: (MonadIO m) => FreqSumHeader -> Consumer FreqSumEntry m ()
 printFreqSumStdOut fsh = do
     liftIO . putStr . freqSumHeaderToText $ fsh
     P.map freqSumEntryToText >-> PT.stdout
 
+-- |A function that writes a freqSum file. Expects the FilePath and the freqSum header as arguments, and then returns a Consumer that accepts freqSum entries.
 printFreqSumFile :: (MonadSafe m) => FilePath -> FreqSumHeader -> Consumer FreqSumEntry m ()
 printFreqSumFile outFile fsh = do
     outFileH <- withFile outFile WriteMode return

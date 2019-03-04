@@ -1,5 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+{-|Module to read and parse Eigenstrat-formatted genotype data. The Eigenstrat format is defined at <https://github.com/argriffing/eigensoft/blob/master/CONVERTF/README>.
+
+-}
+
 module SequenceFormats.Eigenstrat (EigenstratSnpEntry(..), EigenstratIndEntry(..), 
     readEigenstratInd, GenoEntry(..), GenoLine, Sex(..), 
     readEigenstratSnpStdIn, readEigenstratSnpFile, readEigenstrat, writeEigenstrat) where
@@ -22,12 +26,20 @@ import qualified Pipes.Text.IO as PT
 import System.IO (withFile, IOMode(..))
 import Turtle (format, w, d, (%), s)
 
+-- |A datatype to represent a single genomic SNP. The constructor arguments are:
+-- Chromosome, Position, Reference Allele, Alternative Allele.
 data EigenstratSnpEntry = EigenstratSnpEntry Chrom Int Char Char deriving (Eq, Show)
-    -- Chrom Pos Ref Alt
+
+-- |A datatype to represent a single individual. The constructor arguments are:
+-- Name, Sex and Population Name
 data EigenstratIndEntry = EigenstratIndEntry T.Text Sex T.Text deriving (Show)
+
 data Sex = Male | Female | Unknown deriving (Show)
 
+-- |A datatype to represent the genotype of an individual at a SNP.
 data GenoEntry = HomRef | Het | HomAlt | Missing deriving (Eq, Show)
+
+-- |Vector of the genotypes of all individuals at a single SNP.
 type GenoLine = Vector GenoEntry
 
 eigenstratSnpParser :: A.Parser EigenstratSnpEntry
@@ -68,6 +80,7 @@ parseSex = parseMale <|> parseFemale <|> parseUnknown
     parseFemale = A.char 'F' >> return Female
     parseUnknown = A.char 'U' >> return Unknown
 
+-- |Function to read an Eigenstrat individual file. Returns the Eigenstrat Individual Entries as list.
 readEigenstratInd :: (MonadIO m) => FilePath -> m [EigenstratIndEntry]
 readEigenstratInd fn = do
     liftIO . withFile fn ReadMode $ \handle -> do
@@ -88,12 +101,15 @@ eigenstratGenoParser = do
   where
     isValidNum c = c == '0' || c == '1' || c == '2' || c == '9'
 
+-- |Function to read a Snp File from StdIn. Returns a Pipes-Producer over the EigenstratSnpEntries.
 readEigenstratSnpStdIn :: (MonadThrow m, MonadIO m) => Producer EigenstratSnpEntry m ()
 readEigenstratSnpStdIn = consumeProducer eigenstratSnpParser PT.stdin
 
+-- |Function to read a Snp File from a file. Returns a Pipes-Producer over the EigenstratSnpEntries.
 readEigenstratSnpFile :: (MonadSafe m) => FilePath -> Producer EigenstratSnpEntry m ()
 readEigenstratSnpFile = consumeProducer eigenstratSnpParser . PT.readFile
 
+-- |Function to read a full Eigenstrat database from files. Returns a pair of the Eigenstrat Individual Entries, and a joint Producer over the snp entries and the genotypes.
 readEigenstrat :: (MonadSafe m) => FilePath -> FilePath -> FilePath ->
     m ([EigenstratIndEntry], Producer (EigenstratSnpEntry, GenoLine) m ())
 readEigenstrat genoFile snpFile indFile = do
@@ -113,6 +129,7 @@ validateEigenstratEntries nr = for cat $ \line -> do
     else
         yield line
 
+-- |Function to write an Eigenstrat Database. Returns a consumer expecting joint Snp- and Genotype lines.
 writeEigenstrat :: (MonadSafe m) => FilePath -> FilePath -> FilePath -> 
     [EigenstratIndEntry] -> Consumer (EigenstratSnpEntry, GenoLine) m ()
 writeEigenstrat genoFile snpFile indFile indEntries = do
