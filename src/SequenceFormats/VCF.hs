@@ -31,12 +31,10 @@ import Pipes.Attoparsec (parse, ParsingError(..))
 import Pipes.Safe (MonadSafe)
 import qualified Pipes.Text.IO as PT
 
-type Text = T.Text
-
 -- |A datatype to represent the VCF Header. Most comments are simply parsed as entire lines, but the very last comment line, containing the sample names, is separated out
 data VCFheader = VCFheader {
-    vcfHeaderComments :: [Text], -- ^A list of containing all comments starting with a single '#'
-    vcfSampleNames :: [Text] -- ^The list of sample names parsed from the last comment line 
+    vcfHeaderComments :: [T.Text], -- ^A list of containing all comments starting with a single '#'
+    vcfSampleNames :: [T.Text] -- ^The list of sample names parsed from the last comment line 
                              -- starting with '##'
 } deriving (Show)
 
@@ -44,18 +42,18 @@ data VCFheader = VCFheader {
 data VCFentry = VCFentry {
     vcfChrom :: Chrom, -- ^The chromosome
     vcfPos :: Int, -- ^The position
-    vcfId :: Maybe Text, -- ^The SNP ID if non-missing
-    vcfRef :: Text, -- ^ The reference allele (supports also multi-character alleles for Indels)
-    vcfAlt :: [Text], -- ^The alternative alleles, each one possible of multiple characters 
+    vcfId :: Maybe T.Text, -- ^The SNP ID if non-missing
+    vcfRef :: T.Text, -- ^ The reference allele (supports also multi-character alleles for Indels)
+    vcfAlt :: [T.Text], -- ^The alternative alleles, each one possible of multiple characters 
     vcfQual :: Double, -- ^The quality value
-    vcfFilter :: Maybe Text, -- ^The Filter value, if non-missing.
-    vcfInfo :: [Text], -- ^A list of Info fields
-    vcfFormatString :: [Text], -- ^A list of format tags
-    vcfGenotypeInfo :: [[Text]] -- ^A list of format fields for each sapmle.
+    vcfFilter :: Maybe T.Text, -- ^The Filter value, if non-missing.
+    vcfInfo :: [T.Text], -- ^A list of Info fields
+    vcfFormatString :: [T.Text], -- ^A list of format tags
+    vcfGenotypeInfo :: [[T.Text]] -- ^A list of format fields for each sapmle.
 } deriving (Show)
 
 readVCFfromProd :: (MonadThrow m) =>
-    Producer Text m () -> m (VCFheader, Producer VCFentry m ())
+    Producer T.Text m () -> m (VCFheader, Producer VCFentry m ())
 readVCFfromProd prod = do
     (res, rest) <- runStateT (parse vcfHeaderParser) prod
     header <- case res of
@@ -107,7 +105,7 @@ vcfEntryParser = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> par
     parseGenoField = A.takeTill (\c -> c == ':' || isSpace c) 
 
 -- |returns True if the SNP is biallelic.
-isBiallelicSnp :: Text -> [Text] -> Bool
+isBiallelicSnp :: T.Text -> [T.Text] -> Bool
 isBiallelicSnp ref alt = validRef && validAlt
   where
     validRef = (ref `elem` ["A", "C", "G", "T"])
@@ -116,7 +114,7 @@ isBiallelicSnp ref alt = validRef && validAlt
         _ -> False
 
 -- |returns True if the SNp is a biallelic Transversion SNP (i.e. one of G/T, G/C, A/T, A/C)
-isTransversionSnp :: Text -> [Text] -> Bool
+isTransversionSnp :: T.Text -> [T.Text] -> Bool
 isTransversionSnp ref alt =
     case alt of
         [alt'] -> isBiallelicSnp ref alt && (not $ isTransition ref alt')
@@ -126,7 +124,7 @@ isTransversionSnp ref alt =
                        ((r == "C") && (a == "T")) || ((r == "T") && (a == "C"))
 
 -- |Extracts the genotype fields (for each sapmle) from a VCF entry
-getGenotypes :: VCFentry -> Either String [Text]
+getGenotypes :: VCFentry -> Either String [T.Text]
 getGenotypes vcfEntry = do
     gtIndex <- fmap fst . headErr "GT format field not found" . filter ((=="GT") . snd) .
                zip [0..] . vcfFormatString $ vcfEntry

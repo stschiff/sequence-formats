@@ -9,6 +9,7 @@ maintainer:          stephan.schiffels@mac.com
 category:            Bioinformatics
 build-type:          Simple
 cabal-version:       >=1.10
+extra-source-files:  README.md, Changelog.md
 
 library
   exposed-modules:     SequenceFormats.RareAlleleHistogram,

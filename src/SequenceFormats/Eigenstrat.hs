@@ -34,6 +34,7 @@ data EigenstratSnpEntry = EigenstratSnpEntry Chrom Int Char Char deriving (Eq, S
 -- Name, Sex and Population Name
 data EigenstratIndEntry = EigenstratIndEntry T.Text Sex T.Text deriving (Show)
 
+-- |A datatype to represent Sex in an Eigenstrat Individual file
 data Sex = Male | Female | Unknown deriving (Show)
 
 -- |A datatype to represent the genotype of an individual at a SNP.
@@ -110,8 +111,10 @@ readEigenstratSnpFile :: (MonadSafe m) => FilePath -> Producer EigenstratSnpEntr
 readEigenstratSnpFile = consumeProducer eigenstratSnpParser . PT.readFile
 
 -- |Function to read a full Eigenstrat database from files. Returns a pair of the Eigenstrat Individual Entries, and a joint Producer over the snp entries and the genotypes.
-readEigenstrat :: (MonadSafe m) => FilePath -> FilePath -> FilePath ->
-    m ([EigenstratIndEntry], Producer (EigenstratSnpEntry, GenoLine) m ())
+readEigenstrat :: (MonadSafe m) => FilePath -- ^The Genotype file
+               -> FilePath -- ^The Snp File
+               -> FilePath -- ^The Ind file
+               -> m ([EigenstratIndEntry], Producer (EigenstratSnpEntry, GenoLine) m ()) -- The return pair of individual entries and a joint Snp/Geno Producer.
 readEigenstrat genoFile snpFile indFile = do
     indEntries <- readEigenstratInd indFile
     let snpProd = readEigenstratSnpFile snpFile
@@ -130,8 +133,11 @@ validateEigenstratEntries nr = for cat $ \line -> do
         yield line
 
 -- |Function to write an Eigenstrat Database. Returns a consumer expecting joint Snp- and Genotype lines.
-writeEigenstrat :: (MonadSafe m) => FilePath -> FilePath -> FilePath -> 
-    [EigenstratIndEntry] -> Consumer (EigenstratSnpEntry, GenoLine) m ()
+writeEigenstrat :: (MonadSafe m) => FilePath -- ^The Genotype file
+                -> FilePath -- ^The Snp File
+                -> FilePath -- ^The Ind file
+                -> [EigenstratIndEntry] -- ^The list of individual entries
+                -> Consumer (EigenstratSnpEntry, GenoLine) m () -- ^A consumer to read joint Snp/Genotype entries.
 writeEigenstrat genoFile snpFile indFile indEntries = do
     liftIO $ writeEigenstratIndFile indFile indEntries
     let snpOutTextConsumer = PT.writeFile snpFile
