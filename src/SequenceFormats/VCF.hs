@@ -53,6 +53,7 @@ data VCFentry = VCFentry {
     vcfGenotypeInfo :: [[T.Text]] -- ^A list of format fields for each sapmle.
 } deriving (Show)
 
+-- |reads a VCFheader and VCFentries from a text producer.
 readVCFfromProd :: (MonadThrow m) =>
     Producer T.Text m () -> m (VCFheader, Producer VCFentry m ())
 readVCFfromProd prod = do
