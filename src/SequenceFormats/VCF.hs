@@ -50,7 +50,7 @@ data VCFentry = VCFentry {
     vcfFilter :: Maybe T.Text, -- ^The Filter value, if non-missing.
     vcfInfo :: [T.Text], -- ^A list of Info fields
     vcfFormatString :: [T.Text], -- ^A list of format tags
-    vcfGenotypeInfo :: [[T.Text]] -- ^A list of format fields for each sapmle.
+    vcfGenotypeInfo :: [[T.Text]] -- ^A list of format fields for each sample.
 } deriving (Show)
 
 -- |reads a VCFheader and VCFentries from a text producer.
@@ -88,10 +88,15 @@ vcfHeaderParser = VCFheader <$> A.many1' doubleCommentLine <*> singleCommentLine
         return . drop 9 $ fields
 
 vcfEntryParser :: A.Parser VCFentry
-vcfEntryParser = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> parseId <* sp <*>
-    word <* sp <*> parseAlternativeAlleles <* sp <*> A.double <* sp <*> parseFilter <* sp <*> 
-    parseInfoFields <* sp <*> parseFormatStrings <* sp <*> parseGenotypeInfos <* A.endOfLine
+vcfEntryParser = vcfEntryParserFull <|> vcfEntryParserTruncated
   where
+    vcfEntryParserFull = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
+        sp <*> word <* sp <*> parseAlternativeAlleles <* sp <*> A.double <* sp <*> parseFilter <* 
+        sp <*> parseInfoFields <* sp <*> parseFormatStrings <* sp <*> parseGenotypeInfos <* 
+        A.endOfLine
+    vcfEntryParserTruncated = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
+        sp <*> word <* sp <*> parseAlternativeAlleles <* sp <*> A.double <* sp <*> parseFilter <*
+        sp <*> parseInfoFields <*> pure [] <*> pure [] <* A.endOfLine
     word = A.takeTill isSpace
     sp = A.satisfy A.isHorizontalSpace
     parseId = parseDot <|> (Just <$> word)
