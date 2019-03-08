@@ -92,17 +92,17 @@ vcfEntryParser = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> par
     word <* sp <*> parseAlternativeAlleles <* sp <*> A.double <* sp <*> parseFilter <* sp <*> 
     parseInfoFields <* sp <*> parseFormatStrings <* sp <*> parseGenotypeInfos <* A.endOfLine
   where
-    word = A.takeTill A.isHorizontalSpace
+    word = A.takeTill isSpace
     sp = A.satisfy A.isHorizontalSpace
     parseId = parseDot <|> (Just <$> word)
     parseDot = A.char '.' *> empty
     parseAlternativeAlleles = parseDot <|> (parseAllele `A.sepBy1` A.char ',')
-    parseAllele = A.takeTill (\c -> c == ',' || A.isHorizontalSpace c)
+    parseAllele = A.takeTill (\c -> c == ',' || isSpace c)
     parseFilter = parseDot <|> (Just <$> word)
     parseInfoFields = parseDot <|> (parseInfoField `A.sepBy1` A.char ';')
-    parseInfoField = A.takeTill (\c -> c == ';' || A.isHorizontalSpace c)
-    parseFormatStrings = A.takeTill (\c -> c == ':' || A.isHorizontalSpace c) `A.sepBy1` A.char ':'
-    parseGenotypeInfos = parseGenotype `A.sepBy1` (A.satisfy A.isHorizontalSpace)
+    parseInfoField = A.takeTill (\c -> c == ';' || isSpace c)
+    parseFormatStrings = A.takeTill (\c -> c == ':' || isSpace c) `A.sepBy1` A.char ':'
+    parseGenotypeInfos = parseGenotype `A.sepBy1` (A.satisfy isSpace)
     parseGenotype = parseGenoField `A.sepBy1` (A.char ':')
     parseGenoField = A.takeTill (\c -> c == ':' || isSpace c) 
 
