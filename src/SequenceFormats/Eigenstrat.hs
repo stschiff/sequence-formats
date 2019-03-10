@@ -6,7 +6,8 @@
 
 module SequenceFormats.Eigenstrat (EigenstratSnpEntry(..), EigenstratIndEntry(..), 
     readEigenstratInd, GenoEntry(..), GenoLine, Sex(..), 
-    readEigenstratSnpStdIn, readEigenstratSnpFile, readEigenstrat, writeEigenstrat) where
+    readEigenstratSnpStdIn, readEigenstratSnpFile, readBimStdIn, readBimFile,
+    readEigenstrat, writeEigenstrat) where
 
 import SequenceFormats.Utils (consumeProducer, FormatException(..), Chrom(..))
 
@@ -24,11 +25,18 @@ import Pipes.Safe (MonadSafe)
 import qualified Pipes.Prelude as P
 import qualified Pipes.Text.IO as PT
 import System.IO (withFile, IOMode(..))
-import Turtle (format, w, d, (%), s)
+import Turtle (format, w, d, (%), s, g)
 
 -- |A datatype to represent a single genomic SNP. The constructor arguments are:
 -- Chromosome, Position, Reference Allele, Alternative Allele.
-data EigenstratSnpEntry = EigenstratSnpEntry Chrom Int Char Char deriving (Eq, Show)
+data EigenstratSnpEntry = EigenstratSnpEntry {
+    snpChrom :: Chrom,
+    snpPos :: Int,
+    snpGeneticPos :: Double,
+    snpId :: T.Text,
+    snpRef :: Char,
+    snpAlt :: Char
+ } deriving (Eq, Show)
 
 -- |A datatype to represent a single individual. The constructor arguments are:
 -- Name, Sex and Population Name
@@ -45,21 +53,26 @@ type GenoLine = Vector GenoEntry
 
 eigenstratSnpParser :: A.Parser EigenstratSnpEntry
 eigenstratSnpParser = do
-    A.skipMany A.space
-    void word
-    A.skipMany1 A.space
-    chrom <- word
-    A.skipMany1 A.space
-    void word
-    A.skipMany1 A.space
-    pos <- A.decimal
-    A.skipMany1 A.space
-    ref <- A.satisfy (A.inClass "ACTGN")
-    A.skipMany1 A.space
-    alt <- A.satisfy (A.inClass "ACTGX")
+    snpId <- A.skipMany A.space >> word
+    chrom <- A.skipMany1 A.space >> word
+    geneticPos <- A.skipMany1 A.space >> A.double
+    pos <- A.skipMany1 A.space >> A.decimal
+    ref <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGN")
+    alt <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGX")
     void A.endOfLine
-    return $ EigenstratSnpEntry (Chrom chrom) pos ref alt
+    return $ EigenstratSnpEntry (Chrom chrom) pos geneticPos snpId ref alt
 
+bimParser :: A.Parser EigenstratSnpEntry
+bimParser = do
+    chrom <- word
+    snpId <- A.skipMany1 A.space >> word
+    geneticPos <- A.skipMany1 A.space >> A.double
+    pos <- A.skipMany1 A.space >> A.decimal
+    ref <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGN")
+    alt <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGX")
+    void A.endOfLine
+    return $ EigenstratSnpEntry (Chrom chrom) pos geneticPos snpId ref alt
+    
 word :: A.Parser T.Text
 word = A.takeTill isSpace
 
@@ -110,6 +123,14 @@ readEigenstratSnpStdIn = consumeProducer eigenstratSnpParser PT.stdin
 readEigenstratSnpFile :: (MonadSafe m) => FilePath -> Producer EigenstratSnpEntry m ()
 readEigenstratSnpFile = consumeProducer eigenstratSnpParser . PT.readFile
 
+-- |Function to read a Bim File from StdIn. Returns a Pipes-Producer over the EigenstratSnpEntries.
+readBimStdIn :: (MonadThrow m, MonadIO m) => Producer EigenstratSnpEntry m ()
+readBimStdIn = consumeProducer bimParser PT.stdin
+
+-- |Function to read a Bim File from a file. Returns a Pipes-Producer over the EigenstratSnpEntries.
+readBimFile :: (MonadSafe m) => FilePath -> Producer EigenstratSnpEntry m ()
+readBimFile = consumeProducer bimParser . PT.readFile
+
 -- |Function to read a full Eigenstrat database from files. Returns a pair of the Eigenstrat Individual Entries, and a joint Producer over the snp entries and the genotypes.
 readEigenstrat :: (MonadSafe m) => FilePath -- ^The Genotype file
                -> FilePath -- ^The Snp File
@@ -142,10 +163,9 @@ writeEigenstrat genoFile snpFile indFile indEntries = do
     liftIO $ writeEigenstratIndFile indFile indEntries
     let snpOutTextConsumer = PT.writeFile snpFile
         genoOutTextConsumer = PT.writeFile genoFile
-        toTextPipe = P.map (\(EigenstratSnpEntry chrom pos ref alt, genoLine) ->
-            let n = format (s%"_"%d) (unChrom chrom) pos
-                snpLine = format (s%"\t"%s%"\t0\t"%d%"\t"%s%"\t"%s%"\n") n (unChrom chrom) pos
-                    (T.singleton ref) (T.singleton alt)
+        toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt, genoLine) ->
+            let snpLine = format (s%"\t"%s%"\t"%g%"\t"%d%"\t"%s%"\t"%s%"\n") gid (unChrom chrom) 
+                    gpos pos (T.singleton ref) (T.singleton alt)
                 genoLineStr = T.concat . map (format d . toEigenStratNum) . toList $ genoLine
             in  (snpLine, format (s%"\n") genoLineStr))
     toTextPipe >-> P.tee (P.map fst >-> snpOutTextConsumer) >-> P.map snd >-> genoOutTextConsumer

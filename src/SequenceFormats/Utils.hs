@@ -7,6 +7,7 @@ module SequenceFormats.Utils (liftParsingErrors,
                               FormatException(..),
                               Chrom(..)) where
 
+import Control.Error (readErr)
 import Control.Exception (Exception)
 import Control.Monad.Catch (MonadThrow, throwM)
 import Control.Monad.Trans.Class (lift)
@@ -27,9 +28,12 @@ instance Ord Chrom where
     compare (Chrom c1) (Chrom c2) = 
         let c1' = if T.take 3 c1 == "chr" then T.drop 3 c1 else c1
             c2' = if T.take 3 c2 == "chr" then T.drop 3 c2 else c2
-            cn1 = read . T.unpack $ c1' :: Int
-            cn2 = read . T.unpack $ c2' :: Int
-        in  cn1 `compare` cn2
+        in  case (,) <$> readChrom c1 <*> readChrom c2 of
+                Left e -> error e
+                Right (cn1, cn2) -> cn1 `compare` cn2
+
+readChrom :: T.Text -> Either String Int
+readChrom c = readErr ("cannot parse chromosome " ++ show c) . T.unpack $ c
 
 -- |An exception type for parsing BioInformatic file formats.
 data FormatException = FormatException T.Text
