@@ -42,10 +42,10 @@ data EigenstratSnpEntry = EigenstratSnpEntry {
 
 -- |A datatype to represent a single individual. The constructor arguments are:
 -- Name, Sex and Population Name
-data EigenstratIndEntry = EigenstratIndEntry T.Text Sex T.Text deriving (Show)
+data EigenstratIndEntry = EigenstratIndEntry T.Text Sex T.Text deriving (Eq, Show)
 
 -- |A datatype to represent Sex in an Eigenstrat Individual file
-data Sex = Male | Female | Unknown deriving (Show)
+data Sex = Male | Female | Unknown deriving (Eq, Show)
 
 -- |A datatype to represent the genotype of an individual at a SNP.
 data GenoEntry = HomRef | Het | HomAlt | Missing deriving (Eq, Show)

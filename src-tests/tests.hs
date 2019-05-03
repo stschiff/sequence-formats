@@ -1,11 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Control.Foldl (purely, list)
-import Pipes.Prelude (fold)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Managed.Safe (runManaged)
+import Control.Monad.Trans.Class (lift)
+import Data.Vector (fromList)
+import Filesystem.Path.CurrentOS (encodeString)
+import Pipes (each, runEffect, (>->))
+import qualified Pipes.Prelude as P
 import Pipes.Safe (runSafeT)
-import SequenceFormats.Eigenstrat (readEigenstratSnpFile, readBimFile, EigenstratSnpEntry(..))
+import SequenceFormats.Eigenstrat (readEigenstrat, writeEigenstrat, readBimFile,
+    EigenstratSnpEntry(..), EigenstratIndEntry(..), GenoLine, Sex(..), GenoEntry(..))
 import SequenceFormats.Utils (Chrom(..))
-
+import Turtle (mktempfile)
 import Test.Tasty (TestTree, testGroup, defaultMain)
 import Test.Tasty.HUnit (Assertion, testCase, assertEqual)
 
@@ -14,11 +21,12 @@ main = defaultMain eigenstratTests
 
 eigenstratTests :: TestTree
 eigenstratTests = testGroup "Eigenstrat Tests" [
-    testCase "EigenstratSnp Read Test" eigenstratSnpReadTest,
-    testCase "Bim Read Test" bimReadTest]
+    testCase "Eigenstrat Read Test" eigenstratReadTest,
+    testCase "Bim Read Test" bimReadTest,
+    testCase "Eigenstrat Write Test" eigenstratWriteTest]
 
-testEigenstratSnpDat :: [EigenstratSnpEntry]
-testEigenstratSnpDat = [
+testDatEigenstratSnp :: [EigenstratSnpEntry]
+testDatEigenstratSnp = [
     EigenstratSnpEntry (Chrom "11") 0      0.000000 "rs0000" 'A' 'C',
     EigenstratSnpEntry (Chrom "11") 100000 0.001000 "rs1111" 'A' 'G',
     EigenstratSnpEntry (Chrom "11") 200000 0.002000 "rs2222" 'A' 'T',
@@ -27,19 +35,56 @@ testEigenstratSnpDat = [
     EigenstratSnpEntry (Chrom "11") 500000 0.005000 "rs5555" 'T' 'A',
     EigenstratSnpEntry (Chrom "11") 600000 0.006000 "rs6666" 'G' 'T']
 
-eigenstratSnpReadTest :: Assertion
-eigenstratSnpReadTest = do
-    let esSnpProd = readEigenstratSnpFile "testDat/example.snp"
-    esSnpDat <- runSafeT $ purely fold list esSnpProd
-    assertEqual "" testEigenstratSnpDat esSnpDat 
-
 bimReadTest :: Assertion
 bimReadTest = do
     let esSnpProd = readBimFile "testDat/example.bim"
-    esSnpDat <- runSafeT $ purely fold list esSnpProd
-    assertEqual "" testEigenstratSnpDat esSnpDat 
+    esSnpDat <- runSafeT $ purely P.fold list esSnpProd
+    assertEqual "" testDatEigenstratSnp esSnpDat 
 
-writeEigenstratSnpTest :: Assertion
-writeEigenstratSnpTest = do
-    let esProd = each testEigenstratSnpDat
+testDatEigenstratInd :: [EigenstratIndEntry]
+testDatEigenstratInd = [
+    EigenstratIndEntry "SAMPLE0" Female "Case",
+    EigenstratIndEntry "SAMPLE1" Male "Case",
+    EigenstratIndEntry "SAMPLE2" Female "Control",
+    EigenstratIndEntry "SAMPLE3" Male "Control",
+    EigenstratIndEntry "SAMPLE4" Female "Control"]
 
+testDatEigenstratGeno :: [GenoLine]
+testDatEigenstratGeno = [
+    fromList [Het, Het, Het, HomAlt, HomAlt],
+    fromList [HomAlt, Het, HomRef, Het, HomRef],
+    fromList [HomRef, Het, Het, HomAlt, Het],
+    fromList [HomAlt, Missing, Het, HomRef, HomRef],
+    fromList [HomRef, Het, Het, HomAlt, HomAlt],
+    fromList [HomAlt, HomAlt, Het, Missing, Het],
+    fromList [HomRef, HomRef, Het, Missing, Missing]]
+
+eigenstratReadTest :: Assertion
+eigenstratReadTest = do
+    let esSnpFile = "testDat/example.snp"
+        esIndFile = "testDat/example.ind"
+        esGenoFile = "testDat/example.eigenstratgeno"
+    (indEntries, esProd) <- runSafeT $ readEigenstrat esGenoFile esSnpFile esIndFile
+    assertEqual "eigenstratReadTest_assertIndEntries" testDatEigenstratInd indEntries
+    snpGenoEntries <- runSafeT $ purely P.fold list esProd
+    assertEqual "eigenstratReadTest_assertSnpEntries" testDatEigenstratSnp (map fst snpGenoEntries)
+    assertEqual "eigenstratReadTest_assertGenoEntries" testDatEigenstratGeno
+        (map snd snpGenoEntries)
+
+eigenstratWriteTest :: Assertion
+eigenstratWriteTest = runManaged $ do
+    tmpGeno <- encodeString <$> mktempfile "testDat" "eigenstratWriteTest"
+    tmpSnp <- encodeString <$> mktempfile "testDat" "eigenstratWriteTest"
+    tmpInd <- encodeString <$> mktempfile "testDat" "eigenstratWriteTest"
+    let testDatSnpProd = each testDatEigenstratSnp
+        testDatGenoProd = each testDatEigenstratGeno
+        testDatJointProd = P.zip testDatSnpProd testDatGenoProd
+    liftIO . runSafeT . runEffect $
+        testDatJointProd >-> writeEigenstrat tmpGeno tmpSnp tmpInd testDatEigenstratInd
+    (indEntries, esProd) <- liftIO . runSafeT $ readEigenstrat tmpGeno tmpSnp tmpInd
+    liftIO $ assertEqual "eigenstratWriteTest_assertIndEntries" testDatEigenstratInd indEntries
+    snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
+    liftIO $ assertEqual "eigenstratWriteTest_assertIndEntries" testDatEigenstratSnp
+        (map fst snpGenoEntries)
+    liftIO $ assertEqual "eigenstratWriteTest_assertIndEntries" testDatEigenstratGeno
+        (map snd snpGenoEntries)
