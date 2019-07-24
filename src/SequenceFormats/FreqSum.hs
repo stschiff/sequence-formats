@@ -31,7 +31,7 @@ import Turtle (format, s, d, (%))
 data FreqSumHeader = FreqSumHeader {
     fshNames :: [Text], -- ^A list of individual or group names
     fshCounts :: [Int] -- ^A list of haplotype counts per individual/group.
-} deriving (Eq)
+} deriving (Eq, Show)
 
 freqSumHeaderToText :: FreqSumHeader -> Text
 freqSumHeaderToText (FreqSumHeader names nCounts) =
@@ -46,7 +46,7 @@ data FreqSumEntry = FreqSumEntry {
     fsRef    :: Char, -- ^The reference allele
     fsAlt    :: Char, -- ^The alternative allele
     fsCounts :: [Maybe Int] -- ^A list of allele counts in each group. Nothing denotes missing data.
-}
+} deriving (Eq, Show)
 
 -- |This function converts a single freqSum entry to a printable freqSum line.
 freqSumEntryToText :: FreqSumEntry -> Text
