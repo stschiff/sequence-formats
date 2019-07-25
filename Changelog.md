@@ -13,3 +13,5 @@ V 1.1.8: Added more consumers for Bim and Eigenstrat Snp files
 V 1.1.8.1: Added Eq class to EigenstratInd and Sex
 
 V 1.1.8.2: Added Eq and Show classes to various FreqSum entities. Fixed writing function, added tests.
+
+V 1.1.8.3: Added tests for Fasta import. Succeed.
