@@ -103,7 +103,8 @@ printFreqSumStdOut fsh = do
 
 -- |A function that writes a freqSum file. Expects the FilePath and the freqSum header as arguments, and then returns a Consumer that accepts freqSum entries.
 printFreqSumFile :: (MonadSafe m) => FilePath -> FreqSumHeader -> Consumer FreqSumEntry m ()
-printFreqSumFile outFile fsh = do
-    outFileH <- withFile outFile WriteMode return
-    liftIO . hPutStr outFileH . freqSumHeaderToText $ fsh
-    P.map freqSumEntryToText >-> PT.toHandle outFileH
+printFreqSumFile outFile fsh = withFile outFile WriteMode go
+  where
+    go h = do
+        liftIO . hPutStr h . freqSumHeaderToText $ fsh
+        P.map freqSumEntryToText >-> PT.toHandle h

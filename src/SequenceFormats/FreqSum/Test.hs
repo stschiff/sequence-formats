@@ -17,33 +17,33 @@ import Turtle (mktempfile)
 import Test.Tasty.HUnit (Assertion, assertEqual)
 
 fsReadTest :: Assertion
-fsReadTest = do
-    let fsFile = "testDat/example.freqsum"
-    (fsHeader, fsProd) <- runSafeT $ readFreqSumFile fsFile
-    assertEqual "fsReadTest_assertIndEntries" testDatFsHeader fsHeader
-    fsEntries <- runSafeT $ purely P.fold list fsProd
-    assertEqual "fsReadTest_assertFsEntries" testDatFsEntries fsEntries
+fsReadTest = runSafeT $ do
+    let fsFile = "/Users/schiffels/repos/github/stschiff/sequence-formats/testDat/example.freqsum"
+    (fsHeader, fsProd) <- readFreqSumFile fsFile
+    liftIO $ assertEqual "fsReadTest_assertIndEntries" testDatFsHeader fsHeader
+    fsEntries <- purely P.fold list fsProd
+    liftIO $ assertEqual "fsReadTest_assertFsEntries" testDatFsEntries fsEntries
 
 fsWriteTest :: Assertion
 fsWriteTest = runManaged $ do
     tmpFs <- encodeString <$> mktempfile "testDat" "fsWriteTest"
     let testDatFsProd = each testDatFsEntries
-    liftIO . runSafeT . runEffect $
-        testDatFsProd >-> printFreqSumFile tmpFs testDatFsHeader
-    (fsHeader, fsProd) <- liftIO . runSafeT $ readFreqSumFile tmpFs
-    liftIO $ assertEqual "fsWriteTest_assertIndEntries" testDatFsHeader fsHeader
-    fsEntries <- liftIO . runSafeT $ purely P.fold list fsProd
-    liftIO $ assertEqual "fsWriteTest_assertFsEntries" testDatFsEntries fsEntries
+    liftIO . runSafeT . runEffect $ testDatFsProd >-> printFreqSumFile tmpFs testDatFsHeader
+    liftIO . runSafeT $ do
+        (fsHeader, fsProd) <- readFreqSumFile tmpFs
+        liftIO $ assertEqual "fsWriteTest_assertIndEntries" testDatFsHeader fsHeader
+        fsEntries <- purely P.fold list fsProd
+        liftIO $ assertEqual "fsWriteTest_assertFsEntries" testDatFsEntries fsEntries
 
 testDatFsHeader :: FreqSumHeader 
 testDatFsHeader = FreqSumHeader names numbers
   where
-    names = ["SAMPLE0", "SAMPLE1", "SAMPLE2", "SAMPLE3", "SSS"] --"SAMPLE4"]
-    numbers = [2, 2, 2, 1, 4]--1]
+    names = ["SAMPLE0", "SAMPLE1", "SAMPLE2", "SAMPLE3", "SAMPLE4"]
+    numbers = [2, 2, 2, 1, 1]
 
 testDatFsEntries :: [FreqSumEntry]
 testDatFsEntries = [
-    FreqSumEntry (Chrom "11") 0      'A' 'C' [Just 1, Just 1,  Just 1, Just 1,  Just 0],--1],
+    FreqSumEntry (Chrom "11") 0      'A' 'C' [Just 1, Just 1,  Just 1, Just 1,  Just 1],
     FreqSumEntry (Chrom "11") 100000 'A' 'G' [Just 2, Just 1,  Just 0, Just 0,  Just 0],
     FreqSumEntry (Chrom "11") 200000 'A' 'T' [Just 0, Just 1,  Just 1, Just 1,  Just 1],
     FreqSumEntry (Chrom "11") 300000 'C' 'A' [Just 2, Nothing, Just 1, Just 0,  Just 0],
