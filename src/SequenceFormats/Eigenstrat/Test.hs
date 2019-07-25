@@ -4,7 +4,6 @@ module SequenceFormats.Eigenstrat.Test (bimReadTest, eigenstratReadTest, eigenst
 import Control.Foldl (purely, list)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Managed.Safe (runManaged)
-import Control.Monad.Trans.Class (lift)
 import Data.Vector (fromList)
 import Filesystem.Path.CurrentOS (encodeString)
 import Pipes (each, runEffect, (>->))
