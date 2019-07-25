@@ -11,3 +11,5 @@ V 1.1.7: Added option to parse Bim file (slightly different layout to Eigenstrat
 V 1.1.8: Added more consumers for Bim and Eigenstrat Snp files
 
 V 1.1.8.1: Added Eq class to EigenstratInd and Sex
+
+V 1.1.8.2: Added Eq and Show classes to various FreqSum entities. Fixed writing function, added tests.
