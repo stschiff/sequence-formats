@@ -5,10 +5,11 @@
 -}
 
 module SequenceFormats.RareAlleleHistogram (RareAlleleHistogram(..), readHistogramFromHandle,
-                            SitePattern, readHistogram, showHistogram, showSitePattern) where
+                            SitePattern, readHistogram, writeHistogramStdOut, writeHistogramFile, showSitePattern) where
 
 import Control.Applicative (optional)
-import Control.Error (Script, scriptIO, assertErr, throwE)
+import Control.Error (Script, runScript, hoistEither, scriptIO, assertErr, throwE)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.State.Strict (evalStateT)
 import qualified Data.Attoparsec.Text as A
 import Data.Char (isAlphaNum)
@@ -16,6 +17,7 @@ import Data.Int (Int64)
 import Data.List (intercalate, sortBy)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Pipes.Attoparsec (parse)
 import qualified Pipes.Text.IO as PT
 import System.IO (Handle, openFile, IOMode(..), hClose)
@@ -33,7 +35,7 @@ data RareAlleleHistogram = RareAlleleHistogram {
     raTotalNrSites :: Int64, -- ^The total number of non-missing sites in the genome.
     raCounts :: Map.Map SitePattern Int64, -- ^The actual data, a dictionary from allele sharing patterns to observed numbers.
     raJackknifeEstimates :: Maybe (Map.Map SitePattern (Double, Double)) -- ^An optional dictionary that contains Jackknife estimates and standard deviations for each pattern frequency.
-}
+} deriving (Eq, Show)
 
 -- |A simple type synonym for the SitePattern, represented as a list of Integers that represents 
 -- each pattern across the branches.
@@ -68,6 +70,18 @@ showHistogram hist = do
     return $ T.unlines (head0:head1:head2:head3:body)
   where
     sorted = sortBy (\(_, v1) (_, v2)  -> compare v2 v1) $ Map.toList (raCounts hist)
+
+-- |Write a histogram to the stdout
+writeHistogramStdOut :: (MonadIO m) => RareAlleleHistogram -> m ()
+writeHistogramStdOut hist = do
+    outStr <- liftIO . runScript . hoistEither . showHistogram $ hist
+    liftIO $ T.putStrLn outStr
+
+-- |Write a histogram to a file
+writeHistogramFile :: (MonadIO m) => FilePath -> RareAlleleHistogram -> m ()
+writeHistogramFile outF hist = do
+    outStr <- liftIO . runScript . hoistEither . showHistogram $ hist
+    liftIO $ T.writeFile outF outStr
 
 -- |Read a histogram from a FilePath
 readHistogram :: FilePath -> Script RareAlleleHistogram
