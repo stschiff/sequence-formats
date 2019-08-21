@@ -19,6 +19,7 @@ library
                        SequenceFormats.Fasta,
                        SequenceFormats.Fasta.Test,
                        SequenceFormats.VCF,
+                       SequenceFormats.VCF.Test,
                        SequenceFormats.Eigenstrat,
                        SequenceFormats.Eigenstrat.Test,
                        SequenceFormats.Utils,

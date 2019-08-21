@@ -51,7 +51,7 @@ data VCFentry = VCFentry {
     vcfInfo :: [T.Text], -- ^A list of Info fields
     vcfFormatString :: [T.Text], -- ^A list of format tags
     vcfGenotypeInfo :: [[T.Text]] -- ^A list of format fields for each sample.
-} deriving (Show)
+} deriving (Show, Eq)
 
 -- |reads a VCFheader and VCFentries from a text producer.
 readVCFfromProd :: (MonadThrow m) =>
@@ -99,16 +99,17 @@ vcfEntryParser = vcfEntryParserFull <|> vcfEntryParserTruncated
         sp <*> parseInfoFields <*> pure [] <*> pure [] <* A.endOfLine
     word = A.takeTill isSpace
     sp = A.satisfy A.isHorizontalSpace
-    parseId = parseDot <|> (Just <$> word)
-    parseDot = A.char '.' *> empty
-    parseAlternativeAlleles = parseDot <|> (parseAllele `A.sepBy1` A.char ',')
+    parseId = (parseDot *> pure Nothing) <|> (Just <$> word)
+    parseDot = A.char '.'
+    parseAlternativeAlleles = (parseDot *> pure []) <|> (parseAllele `A.sepBy1` A.char ',')
     parseAllele = A.takeTill (\c -> c == ',' || isSpace c)
-    parseFilter = parseDot <|> (Just <$> word)
-    parseInfoFields = parseDot <|> (parseInfoField `A.sepBy1` A.char ';')
+    parseFilter = (parseDot *> pure Nothing) <|> (Just <$> word)
+    parseInfoFields = (parseDot *> pure []) <|> (parseInfoField `A.sepBy1` A.char ';')
     parseInfoField = A.takeTill (\c -> c == ';' || isSpace c)
-    parseFormatStrings = A.takeTill (\c -> c == ':' || isSpace c) `A.sepBy1` A.char ':'
-    parseGenotypeInfos = parseGenotype `A.sepBy1` (A.satisfy isSpace)
-    parseGenotype = parseGenoField `A.sepBy1` (A.char ':')
+    parseFormatStrings = parseFormatString `A.sepBy1` A.char ':'
+    parseFormatString = A.takeTill (\c -> c == ':' || isSpace c)
+    parseGenotypeInfos = parseGenotype `A.sepBy1` sp
+    parseGenotype = parseGenoField `A.sepBy1` A.char ':'
     parseGenoField = A.takeTill (\c -> c == ':' || isSpace c) 
 
 -- |returns True if the SNP is biallelic.

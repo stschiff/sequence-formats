@@ -5,13 +5,15 @@ import SequenceFormats.Eigenstrat.Test (eigenstratReadTest, bimReadTest, eigenst
 import SequenceFormats.FreqSum.Test (fsReadTest, fsWriteTest)
 import SequenceFormats.Fasta.Test (testFastaRead)
 import SequenceFormats.Utils.Test (testChromOrder)
+import SequenceFormats.VCF.Test (testReadVCF, testGetGenotypes, testGetDosages, testIsTransversionSnp, testIsBiallelicSnp, testVcfToFreqsumEntry)
 import Test.Tasty (TestTree, testGroup, defaultMain)
 import Test.Tasty.HUnit (testCase)
 
 main :: IO ()
 main = defaultMain allTests
   where
-    allTests = testGroup "Tests" [eigenstratTests, freqSumTests, fastaTests, rahTests, chromTests]
+    allTests = testGroup "Tests" [eigenstratTests, freqSumTests, fastaTests, rahTests, chromTests,
+        vcfTests]
 
 eigenstratTests :: TestTree
 eigenstratTests = testGroup "Eigenstrat Tests" [
@@ -35,3 +37,12 @@ rahTests = testGroup "Histogram Tests" [
 chromTests :: TestTree
 chromTests = testGroup "Chrom tests" [
   testCase "Chromosome ordering tests" testChromOrder]
+
+vcfTests :: TestTree
+vcfTests = testGroup "VCF tests" [
+    testCase "VCF read test" testReadVCF,
+    testCase "VCF getGenotypes" testGetGenotypes,
+    testCase "VCF getDosages" testGetDosages,
+    testCase "VCF isTransitionSnp" testIsTransversionSnp,
+    testCase "VCF isBiallelicSnp" testIsBiallelicSnp,
+    testCase "VCF testVcfToFreqsumEntry" testVcfToFreqsumEntry]
