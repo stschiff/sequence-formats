@@ -1,5 +1,5 @@
 name:                sequence-formats
-version:             1.3.0
+version:             1.3.1
 synopsis:            A package with basic parsing utilities for several Bioinformatic data formats.
 description:         Contains utilities to parse and write Eigenstrat, Fasta, FreqSum, VCF and other file formats used in population genetics analyses.
 license:             GPL-3
@@ -13,22 +13,16 @@ extra-source-files:  README.md, Changelog.md
 
 library
   exposed-modules:     SequenceFormats.RareAlleleHistogram,
-                       SequenceFormats.RareAlleleHistogram.Test,
                        SequenceFormats.FreqSum,
-                       SequenceFormats.FreqSum.Test,
                        SequenceFormats.Fasta,
-                       SequenceFormats.Fasta.Test,
                        SequenceFormats.VCF,
-                       SequenceFormats.VCF.Test,
                        SequenceFormats.Eigenstrat,
-                       SequenceFormats.Eigenstrat.Test,
-                       SequenceFormats.Utils,
-                       SequenceFormats.Utils.Test
+                       SequenceFormats.Utils
   hs-source-dirs:      src
   build-depends:       base >= 4.7 && < 5, containers, errors, attoparsec, pipes,
                        transformers, bytestring, lens-family,
                        pipes-bytestring, foldl, exceptions, pipes-safe,
-                       pipes-attoparsec, vector, tasty-hunit
+                       pipes-attoparsec, vector
   default-language:    Haskell2010
 
 Test-Suite sequenceFormatTests
@@ -36,5 +30,11 @@ Test-Suite sequenceFormatTests
   main-is:             tests.hs
   hs-source-dirs:      src-tests
   build-depends:       base, sequence-formats, foldl, pipes, pipes-safe, tasty, vector,
-                       transformers, turtle, tasty-hunit
+                       transformers, tasty-hunit, bytestring, containers
+  other-modules:       SequenceFormats.Eigenstrat.Test,
+                       SequenceFormats.Fasta.Test,
+                       SequenceFormats.FreqSum.Test,
+                       SequenceFormats.RareAlleleHistogram.Test,
+                       SequenceFormats.Utils.Test,
+                       SequenceFormats.VCF.Test
   default-language:    Haskell2010
