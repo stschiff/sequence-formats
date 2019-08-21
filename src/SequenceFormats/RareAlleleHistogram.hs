@@ -44,7 +44,7 @@ type SitePattern = [Int]
 
 -- |A simple function to convert a pattern into a String.
 showSitePattern :: SitePattern -> String
-showSitePattern nVec = intercalate "," . map show $ nVec
+showSitePattern = intercalate "," . map show
 
 -- |Function to convert a Rare Allele Histogram to text. Returns an error if attempting to print a 
 -- histogram with non-standard settings. Many settings, such as minAf>1, are only meant for 

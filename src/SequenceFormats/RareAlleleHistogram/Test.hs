@@ -5,7 +5,6 @@ import SequenceFormats.RareAlleleHistogram (RareAlleleHistogram(..), readHistogr
 
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Map as Map
-import System.IO.Temp (withTempFile)
 import Test.Tasty.HUnit (Assertion, assertEqual)
 
 testReadHistogram :: Assertion
@@ -14,12 +13,11 @@ testReadHistogram = do
     assertEqual "readHistogramTest" hist testHistogramDat
 
 testWriteHistogram :: Assertion
-testWriteHistogram = withTempFile "testDat" "histogramWriteTest" go
-  where
-    go fn _ = do
-        writeHistogramFile fn testHistogramDat
-        hist <- liftIO  $ readHistogram fn
-        liftIO $ assertEqual "writeHistogramTest" hist testHistogramDat
+testWriteHistogram = do
+    let fn = "/tmp/histogramWriteTest.txt"
+    writeHistogramFile fn testHistogramDat
+    hist <- liftIO  $ readHistogram fn
+    liftIO $ assertEqual "writeHistogramTest" hist testHistogramDat
 
 testHistogramDat :: RareAlleleHistogram
 testHistogramDat = RareAlleleHistogram names nVec 1 10 [] [] 1146826657 counts jnEstimates

@@ -1,6 +1,5 @@
 flags: {}
 packages:
 - '.'
-extra-deps: ["pipes-text-0.0.2.5@sha256:16cfd1927817a1c757b15c37ad95c67e819c28b1c4a6ce9757ab15276ec36ac7"]
+extra-deps: []
 resolver: lts-14.1
-allow-newer: true

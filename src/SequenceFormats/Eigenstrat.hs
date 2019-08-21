@@ -97,8 +97,8 @@ parseSex = parseMale <|> parseFemale <|> parseUnknown
 
 -- |Function to read an Eigenstrat individual file. Returns the Eigenstrat Individual Entries as list.
 readEigenstratInd :: (MonadIO m) => FilePath -> m [EigenstratIndEntry]
-readEigenstratInd fn = do
-    liftIO . withFile fn ReadMode $ \handle -> do
+readEigenstratInd fn =
+    liftIO . withFile fn ReadMode $ \handle ->
         P.toListM $ consumeProducer eigenstratIndParser (PB.fromHandle handle)
 
 eigenstratGenoParser :: A.Parser GenoLine
@@ -145,7 +145,7 @@ readEigenstrat genoFile snpFile indFile = do
     return (indEntries, P.zip snpProd genoProd)
 
 validateEigenstratEntries :: (MonadThrow m) => Int -> Pipe GenoLine GenoLine m ()
-validateEigenstratEntries nr = for cat $ \line -> do
+validateEigenstratEntries nr = for cat $ \line ->
     if length line /= nr
     then do
         let msg = "inconsistent nr of genotypes (" <> show (length line) <> ", but should be " <> show nr <> ") in \
@@ -156,9 +156,9 @@ validateEigenstratEntries nr = for cat $ \line -> do
 
 -- |Function to write an Eigenstrat Ind file.
 writeEigenstratIndFile :: (MonadIO m) => FilePath -> [EigenstratIndEntry] -> m ()
-writeEigenstratIndFile f indEntries = do
-    liftIO . withFile f WriteMode $ \h -> do
-        forM_ indEntries $ \(EigenstratIndEntry name sex popName) -> do
+writeEigenstratIndFile f indEntries =
+    liftIO . withFile f WriteMode $ \h ->
+        forM_ indEntries $ \(EigenstratIndEntry name sex popName) ->
             hPutStrLn h $ name <> "\t" <> sexToStr sex <> "\t" <> popName
   where
     sexToStr sex = case sex of
@@ -172,7 +172,9 @@ writeEigenstratSnp :: (MonadIO m) => Handle -- ^The Eigenstrat Snp File Handle.
 writeEigenstratSnp snpFileH =
     let snpOutTextConsumer = PB.toHandle snpFileH
         toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt) ->
-            B.intercalate "\t" [gid, B.pack (unChrom chrom), B.pack (show gpos), B.pack (show pos), B.singleton ref, B.singleton alt])
+            let snpLine = B.intercalate "\t" [gid, B.pack (unChrom chrom), B.pack (show gpos),
+                    B.pack (show pos), B.singleton ref, B.singleton alt]
+            in  snpLine <> "\n")
     in  toTextPipe >-> snpOutTextConsumer
 
 -- |Function to write a Bim file. Returns a consumer expecting EigenstratSnpEntries.

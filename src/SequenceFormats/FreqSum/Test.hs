@@ -10,7 +10,6 @@ import Control.Monad.IO.Class (liftIO)
 import Pipes (each, runEffect, (>->))
 import qualified Pipes.Prelude as P
 import Pipes.Safe (runSafeT)
-import System.IO.Temp (withTempFile)
 import Test.Tasty.HUnit (Assertion, assertEqual)
 
 fsReadTest :: Assertion
@@ -22,16 +21,15 @@ fsReadTest = runSafeT $ do
     liftIO $ assertEqual "fsReadTest_assertFsEntries" testDatFsEntries fsEntries
 
 fsWriteTest :: Assertion
-fsWriteTest = withTempFile "testDat" "fsWriteTest" go
-  where 
-    go fn _ = do
-        let testDatFsProd = each testDatFsEntries
-        runSafeT . runEffect $ testDatFsProd >-> printFreqSumFile fn testDatFsHeader
-        runSafeT $ do
-            (fsHeader, fsProd) <- readFreqSumFile fn
-            liftIO $ assertEqual "fsWriteTest_assertIndEntries" testDatFsHeader fsHeader
-            fsEntries <- purely P.fold list fsProd
-            liftIO $ assertEqual "fsWriteTest_assertFsEntries" testDatFsEntries fsEntries
+fsWriteTest = do
+    let fn = "/tmp/freqSumWriteTest.txt"
+        testDatFsProd = each testDatFsEntries
+    runSafeT . runEffect $ testDatFsProd >-> printFreqSumFile fn testDatFsHeader
+    runSafeT $ do
+        (fsHeader, fsProd) <- readFreqSumFile fn
+        liftIO $ assertEqual "fsWriteTest_assertIndEntries" testDatFsHeader fsHeader
+        fsEntries <- purely P.fold list fsProd
+        liftIO $ assertEqual "fsWriteTest_assertFsEntries" testDatFsEntries fsEntries
 
 testDatFsHeader :: FreqSumHeader 
 testDatFsHeader = FreqSumHeader names numbers

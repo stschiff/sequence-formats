@@ -52,7 +52,7 @@ testIsTransversionSnp = do
     assertEqual "testTransversion2" True (isTransversionSnp "C" ["G"])
 
 testVcfToFreqsumEntry :: Assertion
-testVcfToFreqsumEntry = do
+testVcfToFreqsumEntry =
     assertEqual "vcfToFreqsumValid" (Right (FreqSumEntry (Chrom "1") 10492 'C' 'T' [Just 0, Just 0, Just 1, Just 0, Just 0])) (vcfToFreqSumEntry vcf1)
 
 testIsBiallelicSnp :: Assertion

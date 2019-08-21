@@ -17,3 +17,5 @@ V 1.1.8.2: Added Eq and Show classes to various FreqSum entities. Fixed writing 
 V 1.1.8.3: Added tests for Fasta import. Succeed.
 
 V 1.2.0: Added tests for VCF, and several bugfixes. Now runs on LTS-14.1 with pipes-text as legacy dependency.
+
+V 1.3.0: Removed pipes-text, text and turtle dependencies and some more. Restructured all datatypes to use Bytestring instead of text. 
