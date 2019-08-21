@@ -1,26 +1,25 @@
 {-# LANGUAGE OverloadedStrings #-}
 module SequenceFormats.RareAlleleHistogram.Test (testReadHistogram, testWriteHistogram) where
 
-import Control.Error (runScript)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Managed.Safe (runManaged)
-import qualified Data.Map as Map
-import Filesystem.Path.CurrentOS (encodeString)
 import SequenceFormats.RareAlleleHistogram (RareAlleleHistogram(..), readHistogram, writeHistogramFile)
+
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Map as Map
+import System.IO.Temp (withTempFile)
 import Test.Tasty.HUnit (Assertion, assertEqual)
-import Turtle (mktempfile)
 
 testReadHistogram :: Assertion
 testReadHistogram = do
-    hist <- runScript $ readHistogram "testDat/example.histogram.txt"
+    hist <- readHistogram "testDat/example.histogram.txt"
     assertEqual "readHistogramTest" hist testHistogramDat
 
 testWriteHistogram :: Assertion
-testWriteHistogram = runManaged $ do
-    tmpFs <- encodeString <$> mktempfile "testDat" "histogramWriteTest"
-    writeHistogramFile tmpFs testHistogramDat
-    hist <- liftIO . runScript $ readHistogram tmpFs
-    liftIO $ assertEqual "writeHistogramTest" hist testHistogramDat
+testWriteHistogram = withTempFile "testDat" "histogramWriteTest" go
+  where
+    go fn _ = do
+        writeHistogramFile fn testHistogramDat
+        hist <- liftIO  $ readHistogram fn
+        liftIO $ assertEqual "writeHistogramTest" hist testHistogramDat
 
 testHistogramDat :: RareAlleleHistogram
 testHistogramDat = RareAlleleHistogram names nVec 1 10 [] [] 1146826657 counts jnEstimates

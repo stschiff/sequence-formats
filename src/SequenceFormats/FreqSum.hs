@@ -13,31 +13,29 @@ import Control.Applicative ((<|>))
 import Control.Monad.Catch (MonadThrow, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.State.Strict (runStateT)
-import qualified Data.Attoparsec.Text as A
+import qualified Data.Attoparsec.ByteString.Char8 as A
 import Data.Char (isAlphaNum, isSpace)
-import Data.Text (Text, intercalate, singleton)
-import Data.Text.IO (putStr, hPutStr)
+import qualified Data.ByteString.Char8 as B
 import Pipes (Producer, (>->), Consumer)
 import Pipes.Attoparsec (parse, ParsingError(..))
 import qualified Pipes.Prelude as P
 import Pipes.Safe (MonadSafe)
 import Pipes.Safe.Prelude (withFile)
-import qualified Pipes.Text.IO as PT
+import qualified Pipes.ByteString as PB
 import Prelude hiding (putStr)
 import System.IO (IOMode(..))
-import Turtle (format, s, d, (%))
 
 -- |A Datatype representing the Header
 data FreqSumHeader = FreqSumHeader {
-    fshNames :: [Text], -- ^A list of individual or group names
+    fshNames :: [B.ByteString], -- ^A list of individual or group names
     fshCounts :: [Int] -- ^A list of haplotype counts per individual/group.
 } deriving (Eq, Show)
 
-freqSumHeaderToText :: FreqSumHeader -> Text
+freqSumHeaderToText :: FreqSumHeader -> B.ByteString
 freqSumHeaderToText (FreqSumHeader names nCounts) =
-    format ("#CHROM\tPOS\tREF\tALT\t"%s%"\n") (intercalate "\t" tuples)
+    "#CHROM\tPOS\tREF\tALT\t" <> B.intercalate "\t" tuples <> "\n"
   where
-    tuples = zipWith (\n c -> format (s%"("%d%")") n c) names nCounts
+    tuples = zipWith (\n c -> n <> "(" <> B.pack (show c) <> ")") names nCounts
 
 -- |A Datatype to denote a single freqSum line
 data FreqSumEntry = FreqSumEntry {
@@ -49,17 +47,16 @@ data FreqSumEntry = FreqSumEntry {
 } deriving (Eq, Show)
 
 -- |This function converts a single freqSum entry to a printable freqSum line.
-freqSumEntryToText :: FreqSumEntry -> Text
+freqSumEntryToText :: FreqSumEntry -> B.ByteString
 freqSumEntryToText (FreqSumEntry chrom pos ref alt maybeCounts) =
-    format (s%"\t"%d%"\t"%s%"\t"%s%"\t"%s%"\n") (unChrom chrom) pos (singleton ref) (singleton alt) 
-        countStr 
+    B.intercalate "\t" [B.pack (unChrom chrom), B.pack (show pos), B.singleton ref, B.singleton alt, countStr] <> "\n"
   where
-    countStr = intercalate "\t" . map (format d . convertToNum) $ maybeCounts 
+    countStr = B.intercalate "\t" . map (B.pack . show . convertToNum) $ maybeCounts 
     convertToNum Nothing = -1
     convertToNum (Just a) = a
 
 readFreqSumProd :: (MonadThrow m) =>
-    Producer Text m () -> m (FreqSumHeader, Producer FreqSumEntry m ())
+    Producer B.ByteString m () -> m (FreqSumHeader, Producer FreqSumEntry m ())
 readFreqSumProd prod = do
     (res, rest) <- runStateT (parse parseFreqSumHeader) prod
     header <- case res of
@@ -70,11 +67,11 @@ readFreqSumProd prod = do
 
 -- |A function to read a freqsum file from StdIn. Returns a pair of a freqSum Header and a Producer over all lines.
 readFreqSumStdIn :: (MonadIO m, MonadThrow m) => m (FreqSumHeader, Producer FreqSumEntry m ())
-readFreqSumStdIn = readFreqSumProd PT.stdin
+readFreqSumStdIn = readFreqSumProd PB.stdin
 
 -- |A function to read a freqsum file from a file. Returns a pair of a freqSum Header and a Producer over all lines.
 readFreqSumFile :: (MonadSafe m) => FilePath -> m (FreqSumHeader, Producer FreqSumEntry m ())
-readFreqSumFile = readFreqSumProd . PT.readFile
+readFreqSumFile file = readFreqSumProd $ withFile file ReadMode PB.fromHandle
 
 parseFreqSumHeader :: A.Parser FreqSumHeader
 parseFreqSumHeader = do
@@ -86,7 +83,7 @@ parseFreqSumHeader = do
     tuple = (,) <$> A.takeWhile (\c -> isAlphaNum c || c == '_' || c == '-') <* A.char '(' <*> A.decimal <* A.char ')'
 
 parseFreqSumEntry :: A.Parser FreqSumEntry
-parseFreqSumEntry = FreqSumEntry <$> (Chrom <$> A.takeTill isSpace) <* A.skipSpace <*> A.decimal <*
+parseFreqSumEntry = FreqSumEntry <$> (Chrom . B.unpack <$> A.takeTill isSpace) <* A.skipSpace <*> A.decimal <*
     A.skipSpace <*> base <* A.skipSpace <*> baseOrDot <* A.skipSpace <*> counts <* A.endOfLine
   where
     counts = (parseMissing <|> parseCount) `A.sepBy` A.char '\t'
@@ -98,13 +95,13 @@ parseFreqSumEntry = FreqSumEntry <$> (Chrom <$> A.takeTill isSpace) <* A.skipSpa
 -- |A function to write freqSum data to StdOut. Expects the freqSum header as argument, and then returns a Consumer that accepts freqSum entries.
 printFreqSumStdOut :: (MonadIO m) => FreqSumHeader -> Consumer FreqSumEntry m ()
 printFreqSumStdOut fsh = do
-    liftIO . putStr . freqSumHeaderToText $ fsh
-    P.map freqSumEntryToText >-> PT.stdout
+    liftIO . B.putStr . freqSumHeaderToText $ fsh
+    P.map freqSumEntryToText >-> PB.stdout
 
 -- |A function that writes a freqSum file. Expects the FilePath and the freqSum header as arguments, and then returns a Consumer that accepts freqSum entries.
 printFreqSumFile :: (MonadSafe m) => FilePath -> FreqSumHeader -> Consumer FreqSumEntry m ()
 printFreqSumFile outFile fsh = withFile outFile WriteMode go
   where
     go h = do
-        liftIO . hPutStr h . freqSumHeaderToText $ fsh
-        P.map freqSumEntryToText >-> PT.toHandle h
+        liftIO . B.hPutStr h . freqSumHeaderToText $ fsh
+        P.map freqSumEntryToText >-> PB.toHandle h

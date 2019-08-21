@@ -7,25 +7,26 @@
 module SequenceFormats.RareAlleleHistogram (RareAlleleHistogram(..), readHistogramFromHandle,
                             SitePattern, readHistogram, writeHistogramStdOut, writeHistogramFile, showSitePattern) where
 
+import SequenceFormats.Utils (SeqFormatException(..))
+
 import Control.Applicative (optional)
-import Control.Error (Script, runScript, hoistEither, scriptIO, assertErr, throwE)
+import Control.Error (assertErr)
+import Control.Exception (throw)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.State.Strict (evalStateT)
-import qualified Data.Attoparsec.Text as A
+import qualified Data.Attoparsec.ByteString.Char8 as A
 import Data.Char (isAlphaNum)
 import Data.Int (Int64)
 import Data.List (intercalate, sortBy)
 import qualified Data.Map.Strict as Map
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
+import qualified Data.ByteString.Char8 as B
 import Pipes.Attoparsec (parse)
-import qualified Pipes.Text.IO as PT
-import System.IO (Handle, openFile, IOMode(..), hClose)
-import Turtle.Format ((%), w, format)
+import qualified Pipes.ByteString as PB
+import System.IO (Handle, IOMode(..), withFile)
 
 -- |A datatype to represent an Allele Sharing Histogram:
 data RareAlleleHistogram = RareAlleleHistogram {
-    raNames :: [T.Text], -- ^A list of branch names
+    raNames :: [B.ByteString], -- ^A list of branch names
     raNVec :: [Int], -- ^A list of haploid sample sizes.
     raMinAf :: Int, -- ^The minimum allele count
     raMaxAf :: Int, -- ^The maximum allele count
@@ -48,56 +49,54 @@ showSitePattern nVec = intercalate "," . map show $ nVec
 -- |Function to convert a Rare Allele Histogram to text. Returns an error if attempting to print a 
 -- histogram with non-standard settings. Many settings, such as minAf>1, are only meant for 
 -- in-memory representations, but are not compatible with the file format itself.
-showHistogram :: RareAlleleHistogram -> Either T.Text T.Text
+showHistogram :: RareAlleleHistogram -> Either String B.ByteString
 showHistogram hist = do
     assertErr "can only print histogram with minAf=1 due to format-legacy" $ raMinAf hist == 1
     assertErr "can only print histogram with no conditioning due to format-legacy" $
         null (raConditionOn hist)
     assertErr "can only print histogram with no exclude pattern due to format-legacy" $
         null (raExcludePatterns hist)
-    let head0 = T.concat ["NAMES=", T.intercalate "," . raNames $ hist]
-        head1 = T.concat ["N=", T.pack . intercalate "," . map show . raNVec $ hist]
-        head2 = T.concat ["MAX_M=", T.pack . show . raMaxAf $ hist]
-        head3 = T.concat ["TOTAL_SITES=", T.pack . show . raTotalNrSites $ hist]
+    let head0 = "NAMES=" <> (B.intercalate "," . raNames $ hist)
+        head1 = "N=" <> (B.pack . intercalate "," . map show . raNVec $ hist)
+        head2 = "MAX_M=" <> (B.pack . show . raMaxAf $ hist)
+        head3 = "TOTAL_SITES=" <> (B.pack . show . raTotalNrSites $ hist)
         body = do
             (k, v) <- sorted
             case raJackknifeEstimates hist of
-                Nothing -> [T.intercalate " " [T.pack . showSitePattern $ k, T.pack . show $ v]]
+                Nothing -> [B.intercalate " " [B.pack . showSitePattern $ k, B.pack . show $ v]]
                 Just jkHist -> do
                     let Just (jkMean, jkSE) = k `Map.lookup` jkHist
-                    return $ T.intercalate " " [T.pack . showSitePattern $ k, T.pack . show $ v,
-                                                T.pack . show $ jkMean, T.pack . show $ jkSE]
-    return $ T.unlines (head0:head1:head2:head3:body)
+                    return $ B.intercalate " " [B.pack . showSitePattern $ k, B.pack . show $ v,
+                                                B.pack . show $ jkMean, B.pack . show $ jkSE]
+    return $ B.unlines (head0:head1:head2:head3:body)
   where
     sorted = sortBy (\(_, v1) (_, v2)  -> compare v2 v1) $ Map.toList (raCounts hist)
 
 -- |Write a histogram to the stdout
 writeHistogramStdOut :: (MonadIO m) => RareAlleleHistogram -> m ()
-writeHistogramStdOut hist = do
-    outStr <- liftIO . runScript . hoistEither . showHistogram $ hist
-    liftIO $ T.putStrLn outStr
+writeHistogramStdOut hist =
+    case showHistogram hist of
+        Left err -> throw (SeqFormatException err)
+        Right outStr -> liftIO $ B.putStrLn outStr
 
 -- |Write a histogram to a file
 writeHistogramFile :: (MonadIO m) => FilePath -> RareAlleleHistogram -> m ()
-writeHistogramFile outF hist = do
-    outStr <- liftIO . runScript . hoistEither . showHistogram $ hist
-    liftIO $ T.writeFile outF outStr
-
+writeHistogramFile outF hist =
+    case showHistogram hist of
+        Left err -> throw (SeqFormatException err)
+        Right outStr -> liftIO $ B.writeFile outF outStr
+    
 -- |Read a histogram from a FilePath
-readHistogram :: FilePath -> Script RareAlleleHistogram
-readHistogram path = do
-    h <- scriptIO $ openFile path ReadMode
-    hist <- readHistogramFromHandle h
-    scriptIO $ hClose h
-    return hist
+readHistogram :: (MonadIO m) => FilePath -> m RareAlleleHistogram
+readHistogram path = liftIO $ withFile path ReadMode readHistogramFromHandle
 
 -- |Read a histogram from a File Handle.
-readHistogramFromHandle :: Handle -> Script RareAlleleHistogram
+readHistogramFromHandle :: (MonadIO m) => Handle -> m RareAlleleHistogram
 readHistogramFromHandle handle = do
-    res <- evalStateT (parse parseHistogram) . PT.fromHandle $ handle
+    res <- evalStateT (parse parseHistogram) . PB.fromHandle $ handle
     case res of
-        Nothing -> throwE "histogram file exhausted too early"
-        Just (Left err) -> throwE $ format ("Histogram parsing error: "%w) err
+        Nothing -> throw (SeqFormatException "histogram file exhausted too early")
+        Just (Left err) -> throw (SeqFormatException ("Histogram parsing error: " <> show err))
         Just (Right hist) -> return hist
 
 parseHistogram :: A.Parser RareAlleleHistogram

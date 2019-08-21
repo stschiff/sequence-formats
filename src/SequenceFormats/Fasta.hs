@@ -14,16 +14,12 @@ import Control.Monad.Trans.State.Strict (runStateT)
 import qualified Data.Attoparsec.ByteString.Char8 as A
 import qualified Data.ByteString.Char8 as B
 import Data.Char (isAlphaNum)
-import qualified Data.Text as T
 import Lens.Family2 (view)
 import Pipes (Producer, next, (>->), runEffect)
 import Pipes.Attoparsec (parse)
 import qualified Pipes.ByteString as P
 import Pipes.Prelude (drain)
-import System.IO (Handle)
-import Turtle.Format (format, (%), s)
-import Turtle.Prelude (err)
-import Turtle.Line (unsafeTextToLine)
+import System.IO (Handle, hPutStr, stderr)
 
 -- |A function to select out a specific chromosome from a Fasta File. Expects a file handle to the 
 -- file and a chromosome. Note that by Chromosome I simply denote a fasta header line, as is the 
@@ -35,7 +31,7 @@ loadFastaChrom refFileHandle chrom = do
   where
     go prod = do
         (chrom_, prod') <- readNextFastaEntry prod
-        err . unsafeTextToLine $ format ("found chromosome "%s) (unChrom chrom_)
+        hPutStr stderr ("found chromosome " <> unChrom chrom_)
         if chrom_ == chrom
         then return (void prod')
         else do
@@ -67,4 +63,4 @@ fastaHeaderLineParser = do
     A.skipSpace
     A.skipWhile (\c -> c /= '\n' && c /= '\r')
     A.endOfLine
-    return . Chrom . T.pack . B.unpack $ chrom
+    return . Chrom . B.unpack $ chrom

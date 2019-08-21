@@ -1,17 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 module SequenceFormats.FreqSum.Test (fsReadTest, fsWriteTest) where
 
-import Control.Foldl (purely, list)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Managed.Safe (runManaged)
-import Filesystem.Path.CurrentOS (encodeString)
-import Pipes (each, runEffect, (>->))
-import qualified Pipes.Prelude as P
-import Pipes.Safe (runSafeT)
 import SequenceFormats.FreqSum (readFreqSumFile, printFreqSumFile, FreqSumEntry(..), 
     FreqSumHeader(..))
 import SequenceFormats.Utils (Chrom(..))
-import Turtle (mktempfile)
+
+import Control.Foldl (purely, list)
+import Control.Monad.IO.Class (liftIO)
+import Pipes (each, runEffect, (>->))
+import qualified Pipes.Prelude as P
+import Pipes.Safe (runSafeT)
+import System.IO.Temp (withTempFile)
 import Test.Tasty.HUnit (Assertion, assertEqual)
 
 fsReadTest :: Assertion
@@ -23,15 +22,16 @@ fsReadTest = runSafeT $ do
     liftIO $ assertEqual "fsReadTest_assertFsEntries" testDatFsEntries fsEntries
 
 fsWriteTest :: Assertion
-fsWriteTest = runManaged $ do
-    tmpFs <- encodeString <$> mktempfile "testDat" "fsWriteTest"
-    let testDatFsProd = each testDatFsEntries
-    liftIO . runSafeT . runEffect $ testDatFsProd >-> printFreqSumFile tmpFs testDatFsHeader
-    liftIO . runSafeT $ do
-        (fsHeader, fsProd) <- readFreqSumFile tmpFs
-        liftIO $ assertEqual "fsWriteTest_assertIndEntries" testDatFsHeader fsHeader
-        fsEntries <- purely P.fold list fsProd
-        liftIO $ assertEqual "fsWriteTest_assertFsEntries" testDatFsEntries fsEntries
+fsWriteTest = withTempFile "testDat" "fsWriteTest" go
+  where 
+    go fn _ = do
+        let testDatFsProd = each testDatFsEntries
+        runSafeT . runEffect $ testDatFsProd >-> printFreqSumFile fn testDatFsHeader
+        runSafeT $ do
+            (fsHeader, fsProd) <- readFreqSumFile fn
+            liftIO $ assertEqual "fsWriteTest_assertIndEntries" testDatFsHeader fsHeader
+            fsEntries <- purely P.fold list fsProd
+            liftIO $ assertEqual "fsWriteTest_assertFsEntries" testDatFsEntries fsEntries
 
 testDatFsHeader :: FreqSumHeader 
 testDatFsHeader = FreqSumHeader names numbers

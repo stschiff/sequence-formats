@@ -10,24 +10,23 @@ module SequenceFormats.Eigenstrat (EigenstratSnpEntry(..), EigenstratIndEntry(..
     readEigenstrat, writeEigenstrat, writeEigenstratIndFile, writeEigenstratSnp, writeBim, 
     writeEigenstratGeno) where
 
-import SequenceFormats.Utils (consumeProducer, FormatException(..), Chrom(..))
+import SequenceFormats.Utils (consumeProducer, SeqFormatException(..), Chrom(..), readFileProd)
 
 import Control.Applicative ((<|>))
+import Control.Exception (throw)
 import Control.Monad (void, forM_)
-import Control.Monad.Catch (MonadThrow, throwM)
+import Control.Monad.Catch (MonadThrow)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import qualified Data.Attoparsec.Text as A
+import qualified Data.Attoparsec.ByteString.Char8 as A
 import Data.Char (isSpace)
 import Data.Vector (Vector, fromList, toList)
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
+import qualified Data.ByteString.Char8 as B
 import Pipes (Producer, Pipe, (>->), for, cat, yield, Consumer)
 import Pipes.Safe (MonadSafe)
 import qualified Pipes.Safe.Prelude as PS
 import qualified Pipes.Prelude as P
-import qualified Pipes.Text.IO as PT
-import System.IO (withFile, IOMode(..), Handle)
-import Turtle (format, w, d, (%), s, g)
+import qualified Pipes.ByteString as PB
+import System.IO (withFile, IOMode(..), Handle, hPutStrLn)
 
 -- |A datatype to represent a single genomic SNP. The constructor arguments are:
 -- Chromosome, Position, Reference Allele, Alternative Allele.
@@ -35,14 +34,14 @@ data EigenstratSnpEntry = EigenstratSnpEntry {
     snpChrom :: Chrom,
     snpPos :: Int,
     snpGeneticPos :: Double,
-    snpId :: T.Text,
+    snpId :: B.ByteString,
     snpRef :: Char,
     snpAlt :: Char
  } deriving (Eq, Show)
 
 -- |A datatype to represent a single individual. The constructor arguments are:
 -- Name, Sex and Population Name
-data EigenstratIndEntry = EigenstratIndEntry T.Text Sex T.Text deriving (Eq, Show)
+data EigenstratIndEntry = EigenstratIndEntry String Sex String deriving (Eq, Show)
 
 -- |A datatype to represent Sex in an Eigenstrat Individual file
 data Sex = Male | Female | Unknown deriving (Eq, Show)
@@ -62,7 +61,7 @@ eigenstratSnpParser = do
     ref <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGN")
     alt <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGX")
     void A.endOfLine
-    return $ EigenstratSnpEntry (Chrom chrom) pos geneticPos snpId_ ref alt
+    return $ EigenstratSnpEntry (Chrom (B.unpack chrom)) pos geneticPos snpId_ ref alt
 
 bimParser :: A.Parser EigenstratSnpEntry
 bimParser = do
@@ -73,9 +72,9 @@ bimParser = do
     ref <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGN")
     alt <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGX")
     void A.endOfLine
-    return $ EigenstratSnpEntry (Chrom chrom) pos geneticPos snpId_ ref alt
+    return $ EigenstratSnpEntry (Chrom (B.unpack chrom)) pos geneticPos snpId_ ref alt
     
-word :: A.Parser T.Text
+word :: A.Parser B.ByteString
 word = A.takeTill isSpace
 
 eigenstratIndParser :: A.Parser EigenstratIndEntry
@@ -87,7 +86,7 @@ eigenstratIndParser = do
     A.skipMany1 A.space
     popName <- word
     void A.endOfLine
-    return $ EigenstratIndEntry name sex popName
+    return $ EigenstratIndEntry (B.unpack name) sex (B.unpack popName)
 
 parseSex :: A.Parser Sex
 parseSex = parseMale <|> parseFemale <|> parseUnknown
@@ -100,14 +99,14 @@ parseSex = parseMale <|> parseFemale <|> parseUnknown
 readEigenstratInd :: (MonadIO m) => FilePath -> m [EigenstratIndEntry]
 readEigenstratInd fn = do
     liftIO . withFile fn ReadMode $ \handle -> do
-        P.toListM $ consumeProducer eigenstratIndParser (PT.fromHandle handle)
+        P.toListM $ consumeProducer eigenstratIndParser (PB.fromHandle handle)
 
 eigenstratGenoParser :: A.Parser GenoLine
 eigenstratGenoParser = do
     line <- A.takeWhile1 isValidNum
     void A.endOfLine
     return . fromList $ do
-        l <- T.unpack line
+        l <- B.unpack line
         case l of
             '0' -> return HomAlt
             '1' -> return Het
@@ -119,19 +118,19 @@ eigenstratGenoParser = do
 
 -- |Function to read a Snp File from StdIn. Returns a Pipes-Producer over the EigenstratSnpEntries.
 readEigenstratSnpStdIn :: (MonadThrow m, MonadIO m) => Producer EigenstratSnpEntry m ()
-readEigenstratSnpStdIn = consumeProducer eigenstratSnpParser PT.stdin
+readEigenstratSnpStdIn = consumeProducer eigenstratSnpParser PB.stdin
 
 -- |Function to read a Snp File from a file. Returns a Pipes-Producer over the EigenstratSnpEntries.
 readEigenstratSnpFile :: (MonadSafe m) => FilePath -> Producer EigenstratSnpEntry m ()
-readEigenstratSnpFile = consumeProducer eigenstratSnpParser . PT.readFile
+readEigenstratSnpFile = consumeProducer eigenstratSnpParser . readFileProd
 
 -- |Function to read a Bim File from StdIn. Returns a Pipes-Producer over the EigenstratSnpEntries.
 readBimStdIn :: (MonadThrow m, MonadIO m) => Producer EigenstratSnpEntry m ()
-readBimStdIn = consumeProducer bimParser PT.stdin
+readBimStdIn = consumeProducer bimParser PB.stdin
 
 -- |Function to read a Bim File from a file. Returns a Pipes-Producer over the EigenstratSnpEntries.
 readBimFile :: (MonadSafe m) => FilePath -> Producer EigenstratSnpEntry m ()
-readBimFile = consumeProducer bimParser . PT.readFile
+readBimFile = consumeProducer bimParser . readFileProd
 
 -- |Function to read a full Eigenstrat database from files. Returns a pair of the Eigenstrat Individual Entries, and a joint Producer over the snp entries and the genotypes.
 readEigenstrat :: (MonadSafe m) => FilePath -- ^The Genotype file
@@ -141,7 +140,7 @@ readEigenstrat :: (MonadSafe m) => FilePath -- ^The Genotype file
 readEigenstrat genoFile snpFile indFile = do
     indEntries <- readEigenstratInd indFile
     let snpProd = readEigenstratSnpFile snpFile
-        genoProd = consumeProducer eigenstratGenoParser (PT.readFile genoFile) >-> 
+        genoProd = consumeProducer eigenstratGenoParser (readFileProd genoFile) >-> 
             validateEigenstratEntries (length indEntries)
     return (indEntries, P.zip snpProd genoProd)
 
@@ -149,9 +148,9 @@ validateEigenstratEntries :: (MonadThrow m) => Int -> Pipe GenoLine GenoLine m (
 validateEigenstratEntries nr = for cat $ \line -> do
     if length line /= nr
     then do
-        let msg = format ("inconsistent nr of genotypes ("%d%", but should be "%d%") in \
-                \genotype line "%w) (length line) nr line
-        throwM $ FormatException msg
+        let msg = "inconsistent nr of genotypes (" <> show (length line) <> ", but should be " <> show nr <> ") in \
+                \genotype line " <> show line
+        throw (SeqFormatException msg)
     else
         yield line
 
@@ -160,7 +159,7 @@ writeEigenstratIndFile :: (MonadIO m) => FilePath -> [EigenstratIndEntry] -> m (
 writeEigenstratIndFile f indEntries = do
     liftIO . withFile f WriteMode $ \h -> do
         forM_ indEntries $ \(EigenstratIndEntry name sex popName) -> do
-            liftIO . T.hPutStrLn h $ format (s%"\t"%s%"\t"%s) name (sexToStr sex) popName
+            hPutStrLn h $ name <> "\t" <> sexToStr sex <> "\t" <> popName
   where
     sexToStr sex = case sex of
         Male -> "M"
@@ -171,30 +170,28 @@ writeEigenstratIndFile f indEntries = do
 writeEigenstratSnp :: (MonadIO m) => Handle -- ^The Eigenstrat Snp File Handle.
     -> Consumer EigenstratSnpEntry m () -- ^A consumer to read EigenstratSnpEntries
 writeEigenstratSnp snpFileH =
-    let snpOutTextConsumer = PT.toHandle snpFileH
+    let snpOutTextConsumer = PB.toHandle snpFileH
         toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt) ->
-            format (s%"\t"%s%"\t"%g%"\t"%d%"\t"%s%"\t"%s%"\n") gid (unChrom chrom) 
-                gpos pos (T.singleton ref) (T.singleton alt))
+            B.intercalate "\t" [gid, B.pack (unChrom chrom), B.pack (show gpos), B.pack (show pos), B.singleton ref, B.singleton alt])
     in  toTextPipe >-> snpOutTextConsumer
 
 -- |Function to write a Bim file. Returns a consumer expecting EigenstratSnpEntries.
 writeBim :: (MonadIO m) => Handle -- ^The Eigenstrat Snp File handle.
     -> Consumer EigenstratSnpEntry m () -- ^A consumer to read EigenstratSnpEntries
 writeBim snpFileH =
-    let snpOutTextConsumer = PT.toHandle snpFileH
+    let snpOutTextConsumer = PB.toHandle snpFileH
         toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt) ->
-            format (s%"\t"%s%"\t"%g%"\t"%d%"\t"%s%"\t"%s%"\n") (unChrom chrom) gid
-                gpos pos (T.singleton ref) (T.singleton alt))
+            B.intercalate "\t" [B.pack (unChrom chrom), gid, B.pack (show gpos), B.pack (show pos), B.singleton ref, B.singleton alt])
     in  toTextPipe >-> snpOutTextConsumer
 
 -- |Function to write an Eigentrat Geno File. Returns a consumer expecting Eigenstrat Genolines.
 writeEigenstratGeno :: (MonadIO m) => Handle -- ^The Genotype file handle
                 -> Consumer GenoLine m () -- ^A consumer to read Genotype entries.
 writeEigenstratGeno genoFileH =
-    let genoOutTextConsumer = PT.toHandle genoFileH
+    let genoOutTextConsumer = PB.toHandle genoFileH
         toTextPipe = P.map (\genoLine ->
-            let genoLineStr = T.concat . map (format d . toEigenStratNum) . toList $ genoLine
-            in  format (s%"\n") genoLineStr)
+            let genoLineStr = B.concat . map (B.pack . show . toEigenStratNum) . toList $ genoLine
+            in  genoLineStr <> "\n")
     in  toTextPipe >-> genoOutTextConsumer
   where
     toEigenStratNum c = case c of

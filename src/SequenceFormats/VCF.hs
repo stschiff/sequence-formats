@@ -15,27 +15,27 @@ module SequenceFormats.VCF (VCFheader(..),
                      vcfToFreqSumEntry,
                      isBiallelicSnp) where
 
-import SequenceFormats.Utils (consumeProducer, Chrom(..))
+import SequenceFormats.Utils (consumeProducer, Chrom(..), readFileProd, SeqFormatException(..))
 import SequenceFormats.FreqSum (FreqSumEntry(..))
 
-import Control.Applicative ((<|>), empty)
+import Control.Applicative ((<|>))
 import Control.Error (headErr, assertErr)
 import Control.Monad (void)
 import Control.Monad.Catch (MonadThrow, throwM)
 import Control.Monad.Trans.State.Strict (runStateT)
 import Control.Monad.IO.Class (MonadIO)
-import qualified Data.Attoparsec.Text as A
+import qualified Data.Attoparsec.ByteString.Char8 as A
 import Data.Char (isSpace)
-import qualified Data.Text as T
+import qualified Data.ByteString.Char8 as B
 import Pipes (Producer)
-import Pipes.Attoparsec (parse, ParsingError(..))
+import Pipes.Attoparsec (parse)
 import Pipes.Safe (MonadSafe)
-import qualified Pipes.Text.IO as PT
+import qualified Pipes.ByteString as PB
 
 -- |A datatype to represent the VCF Header. Most comments are simply parsed as entire lines, but the very last comment line, containing the sample names, is separated out
 data VCFheader = VCFheader {
-    vcfHeaderComments :: [T.Text], -- ^A list of containing all comments starting with a single '#'
-    vcfSampleNames :: [T.Text] -- ^The list of sample names parsed from the last comment line 
+    vcfHeaderComments :: [String], -- ^A list of containing all comments starting with a single '#'
+    vcfSampleNames :: [String] -- ^The list of sample names parsed from the last comment line 
                              -- starting with '##'
 } deriving (Show)
 
@@ -43,62 +43,62 @@ data VCFheader = VCFheader {
 data VCFentry = VCFentry {
     vcfChrom :: Chrom, -- ^The chromosome
     vcfPos :: Int, -- ^The position
-    vcfId :: Maybe T.Text, -- ^The SNP ID if non-missing
-    vcfRef :: T.Text, -- ^ The reference allele (supports also multi-character alleles for Indels)
-    vcfAlt :: [T.Text], -- ^The alternative alleles, each one possible of multiple characters 
+    vcfId :: Maybe B.ByteString, -- ^The SNP ID if non-missing
+    vcfRef :: B.ByteString, -- ^ The reference allele (supports also multi-character alleles for Indels)
+    vcfAlt :: [B.ByteString], -- ^The alternative alleles, each one possible of multiple characters 
     vcfQual :: Double, -- ^The quality value
-    vcfFilter :: Maybe T.Text, -- ^The Filter value, if non-missing.
-    vcfInfo :: [T.Text], -- ^A list of Info fields
-    vcfFormatString :: [T.Text], -- ^A list of format tags
-    vcfGenotypeInfo :: [[T.Text]] -- ^A list of format fields for each sample.
+    vcfFilter :: Maybe B.ByteString, -- ^The Filter value, if non-missing.
+    vcfInfo :: [B.ByteString], -- ^A list of Info fields
+    vcfFormatString :: [B.ByteString], -- ^A list of format tags
+    vcfGenotypeInfo :: [[B.ByteString]] -- ^A list of format fields for each sample.
 } deriving (Show, Eq)
 
 -- |reads a VCFheader and VCFentries from a text producer.
 readVCFfromProd :: (MonadThrow m) =>
-    Producer T.Text m () -> m (VCFheader, Producer VCFentry m ())
+    Producer B.ByteString m () -> m (VCFheader, Producer VCFentry m ())
 readVCFfromProd prod = do
     (res, rest) <- runStateT (parse vcfHeaderParser) prod
     header <- case res of
-        Nothing -> throwM $ ParsingError [] "freqSum file exhausted"
-        Just (Left e) -> throwM e
+        Nothing -> throwM $ SeqFormatException "freqSum file exhausted"
+        Just (Left e) -> throwM (SeqFormatException (show e))
         Just (Right h) -> return h
     return (header, consumeProducer vcfEntryParser rest)
 
 -- |Reading a VCF from StdIn. Returns a VCFHeader and a Producer over VCFentries.
 readVCFfromStdIn :: (MonadIO m, MonadThrow m) => m (VCFheader, Producer VCFentry m ())
-readVCFfromStdIn = readVCFfromProd PT.stdin
+readVCFfromStdIn = readVCFfromProd PB.stdin
 
 -- |Reading a VCF from a file. Returns a VCFHeader and a Producer over VCFentries.
 readVCFfromFile :: (MonadSafe m) => FilePath -> m (VCFheader, Producer VCFentry m ())
-readVCFfromFile = readVCFfromProd . PT.readFile
+readVCFfromFile = readVCFfromProd . readFileProd
 
 vcfHeaderParser :: A.Parser VCFheader
 vcfHeaderParser = VCFheader <$> A.many1' doubleCommentLine <*> singleCommentLine
   where
     doubleCommentLine = do
         c1 <- A.string "##"
-        s_ <- A.takeWhile1 (not . A.isEndOfLine)
+        s_ <- A.takeWhile1 (/='\n')
         A.endOfLine
-        return $ T.append c1 s_
+        return . B.unpack $ c1 <> s_
     singleCommentLine = do
         void $ A.char '#'
-        s_ <- A.takeWhile1 (not . A.isEndOfLine)
+        s_ <- A.takeWhile1 (/='\n')
         A.endOfLine
-        let fields = T.splitOn "\t" s_
-        return . drop 9 $ fields
+        let fields = B.splitWith (=='\t') s_
+        return . drop 9 . map B.unpack $ fields
 
 vcfEntryParser :: A.Parser VCFentry
 vcfEntryParser = vcfEntryParserFull <|> vcfEntryParserTruncated
   where
-    vcfEntryParserFull = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
+    vcfEntryParserFull = VCFentry <$> (Chrom . B.unpack <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
         sp <*> word <* sp <*> parseAlternativeAlleles <* sp <*> A.double <* sp <*> parseFilter <* 
         sp <*> parseInfoFields <* sp <*> parseFormatStrings <* sp <*> parseGenotypeInfos <* 
         A.endOfLine
-    vcfEntryParserTruncated = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
+    vcfEntryParserTruncated = VCFentry <$> (Chrom . B.unpack <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
         sp <*> word <* sp <*> parseAlternativeAlleles <* sp <*> A.double <* sp <*> parseFilter <*
         sp <*> parseInfoFields <*> pure [] <*> pure [] <* A.endOfLine
     word = A.takeTill isSpace
-    sp = A.satisfy A.isHorizontalSpace
+    sp = A.satisfy (\c -> c == ' ' || c == '\t')
     parseId = (parseDot *> pure Nothing) <|> (Just <$> word)
     parseDot = A.char '.'
     parseAlternativeAlleles = (parseDot *> pure []) <|> (parseAllele `A.sepBy1` A.char ',')
@@ -113,7 +113,7 @@ vcfEntryParser = vcfEntryParserFull <|> vcfEntryParserTruncated
     parseGenoField = A.takeTill (\c -> c == ':' || isSpace c) 
 
 -- |returns True if the SNP is biallelic.
-isBiallelicSnp :: T.Text -> [T.Text] -> Bool
+isBiallelicSnp :: B.ByteString -> [B.ByteString] -> Bool
 isBiallelicSnp ref alt = validRef && validAlt
   where
     validRef = (ref `elem` ["A", "C", "G", "T"])
@@ -122,7 +122,7 @@ isBiallelicSnp ref alt = validRef && validAlt
         _ -> False
 
 -- |returns True if the SNp is a biallelic Transversion SNP (i.e. one of G/T, G/C, A/T, A/C)
-isTransversionSnp :: T.Text -> [T.Text] -> Bool
+isTransversionSnp :: B.ByteString -> [B.ByteString] -> Bool
 isTransversionSnp ref alt =
     case alt of
         [alt'] -> isBiallelicSnp ref alt && (not $ isTransition ref alt')
@@ -132,7 +132,7 @@ isTransversionSnp ref alt =
                        ((r == "C") && (a == "T")) || ((r == "T") && (a == "C"))
 
 -- |Extracts the genotype fields (for each sapmle) from a VCF entry
-getGenotypes :: VCFentry -> Either String [T.Text]
+getGenotypes :: VCFentry -> Either String [B.ByteString]
 getGenotypes vcfEntry = do
     gtIndex <- fmap fst . headErr "GT format field not found" . filter ((=="GT") . snd) .
                zip [0..] . vcfFormatString $ vcfEntry
@@ -144,21 +144,21 @@ getDosages vcfEntry = do
     genotypes <- getGenotypes vcfEntry
     let dosages = do
             gen <- genotypes
-            if '.' `elem` (T.unpack gen) then
+            if '.' `elem` (B.unpack gen) then
                 return Nothing
             else
-                return . Just $ T.count "1" gen
+                return . Just $ B.count '1' gen
     return dosages
 
 -- |Converts a VCFentry to the simpler FreqSum format (returns a Left Error if it fails.)
 vcfToFreqSumEntry :: VCFentry -> Either String FreqSumEntry
 vcfToFreqSumEntry vcfEntry = do
     dosages <- getDosages vcfEntry
-    assertErr "multi-site reference allele" $ T.length (vcfRef vcfEntry) == 1
+    assertErr "multi-site reference allele" $ B.length (vcfRef vcfEntry) == 1
     assertErr "need exactly one alternative allele" $ length (vcfAlt vcfEntry) == 1
-    assertErr "multi-site alternative allele" $ T.length (head . vcfAlt $ vcfEntry) == 1
-    let ref = T.head (vcfRef vcfEntry)
-    let alt = T.head . head . vcfAlt $ vcfEntry
+    assertErr "multi-site alternative allele" $ B.length (head . vcfAlt $ vcfEntry) == 1
+    let ref = B.head (vcfRef vcfEntry)
+    let alt = B.head . head . vcfAlt $ vcfEntry
     assertErr "Invalid Reference Allele" $ ref `elem` ['A', 'C', 'T', 'G', 'N']
     assertErr "Invalid Alternative Allele" $ alt `elem` ['A', 'C', 'T', 'G', '.']
     return $ FreqSumEntry (vcfChrom vcfEntry) (vcfPos vcfEntry) ref alt dosages
