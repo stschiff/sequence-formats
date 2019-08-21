@@ -15,3 +15,5 @@ V 1.1.8.1: Added Eq class to EigenstratInd and Sex
 V 1.1.8.2: Added Eq and Show classes to various FreqSum entities. Fixed writing function, added tests.
 
 V 1.1.8.3: Added tests for Fasta import. Succeed.
+
+V 1.2.0: Added tests for VCF, and several bugfixes. Now runs on LTS-14.1 with pipes-text as legacy dependency.
