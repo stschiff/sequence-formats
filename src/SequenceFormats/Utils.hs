@@ -47,9 +47,12 @@ liftParsingErrors :: (MonadThrow m) =>
     Either (ParsingError, Producer T.Text m r) () -> Producer a m ()
 liftParsingErrors res = case res of
     Left (ParsingError cont msg, restProd) -> do
-        Right (chunk, _) <- lift $ next restProd
-        let msg' = msg ++ " Error occurred while trying to parse this chunk: " ++ show chunk
-        throwM (ParsingError cont msg')
+        x <- lift $ next restProd
+        case x of
+            Right (chunk, _) -> do
+                let msg' = msg ++ " Error occurred while trying to parse this chunk: " ++ show chunk
+                throwM (ParsingError cont msg')
+            Left _ -> error "should not happen"
     Right () -> return ()
 
 -- |A helper function to parse a text producer, properly reporting all errors to stderr.

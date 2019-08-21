@@ -50,9 +50,12 @@ readNextFastaEntry prod = do
     header <- case res of
         Nothing -> liftIO . throwIO $ AssertionFailed "Could not find chromosome. Fasta file exhausted."
         Just (Left e_) -> do
-            Right (chunk, _) <- next rest
-            let msg = show e_ ++ B.unpack chunk
-            liftIO . throwIO $ AssertionFailed ("Fasta header parsing error: " ++ msg)
+            x <- next rest
+            case x of
+                (Right (chunk, _)) -> do
+                    let msg = show e_ ++ B.unpack chunk
+                    liftIO . throwIO $ AssertionFailed ("Fasta header parsing error: " ++ msg)
+                _ -> error "should not happen"
         Just (Right h) -> return h
     return (header, view (P.break (==62)) rest >-> P.filter (\c -> c /= 10 && c /= 13))
 -- '>' == 62, '\n' == 10, \r == 13
