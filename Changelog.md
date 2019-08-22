@@ -21,3 +21,5 @@ V 1.2.0: Added tests for VCF, and several bugfixes. Now runs on LTS-14.1 with pi
 V 1.3.0: Removed pipes-text, text and turtle dependencies and some more. Restructured all datatypes to use Bytestring instead of text. 
 
 V 1.3.1: Moved test suite outside of the main library into the test source directory. Cleaner setup.
+
+V 1.3.2: Added testDat to Cabal file to make tests work off the tarball.
