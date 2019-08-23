@@ -14,7 +14,7 @@ import Test.Tasty.HUnit (Assertion, assertEqual)
 
 fsReadTest :: Assertion
 fsReadTest = runSafeT $ do
-    let fsFile = "/Users/schiffels/repos/github/stschiff/sequence-formats/testDat/example.freqsum"
+    let fsFile = "testDat/example.freqsum"
     (fsHeader, fsProd) <- readFreqSumFile fsFile
     liftIO $ assertEqual "fsReadTest_assertIndEntries" testDatFsHeader fsHeader
     fsEntries <- purely P.fold list fsProd
