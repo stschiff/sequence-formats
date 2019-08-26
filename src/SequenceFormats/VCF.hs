@@ -15,7 +15,8 @@ module SequenceFormats.VCF (VCFheader(..),
                      vcfToFreqSumEntry,
                      isBiallelicSnp) where
 
-import SequenceFormats.Utils (consumeProducer, Chrom(..), readFileProd, SeqFormatException(..))
+import SequenceFormats.Utils (consumeProducer, Chrom(..),
+    readFileProd, SeqFormatException(..), word)
 import SequenceFormats.FreqSum (FreqSumEntry(..))
 
 import Control.Applicative ((<|>))
@@ -97,7 +98,6 @@ vcfEntryParser = vcfEntryParserFull <|> vcfEntryParserTruncated
     vcfEntryParserTruncated = VCFentry <$> (Chrom . B.unpack <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
         sp <*> word <* sp <*> parseAlternativeAlleles <* sp <*> A.double <* sp <*> parseFilter <*
         sp <*> parseInfoFields <*> pure [] <*> pure [] <* A.endOfLine
-    word = A.takeTill isSpace
     sp = A.satisfy (\c -> c == ' ' || c == '\t')
     parseId = (parseDot *> pure Nothing) <|> (Just <$> word)
     parseDot = A.char '.'

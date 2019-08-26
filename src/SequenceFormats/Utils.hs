@@ -5,14 +5,15 @@
 module SequenceFormats.Utils (liftParsingErrors,
                               consumeProducer, readFileProd,
                               SeqFormatException(..),
-                              Chrom(..)) where
+                              Chrom(..), word) where
 
 import Control.Error (readErr)
 import Control.Exception (Exception)
 import Control.Monad.Catch (MonadThrow, throwM)
 import Control.Monad.Trans.Class (lift)
-import qualified Data.ByteString.Char8 as B
 import qualified Data.Attoparsec.ByteString.Char8 as A
+import qualified Data.ByteString.Char8 as B
+import Data.Char (isSpace)
 import Pipes (Producer, next)
 import Pipes.Attoparsec (ParsingError(..), parsed)
 import qualified Pipes.ByteString as PB
@@ -66,3 +67,5 @@ consumeProducer parser prod = parsed parser prod >>= liftParsingErrors
 readFileProd :: (PS.MonadSafe m) => FilePath -> Producer B.ByteString m ()
 readFileProd f = PS.withFile f ReadMode PB.fromHandle
 
+word :: A.Parser B.ByteString
+word = A.takeTill isSpace

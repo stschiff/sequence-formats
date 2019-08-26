@@ -10,7 +10,8 @@ module SequenceFormats.Eigenstrat (EigenstratSnpEntry(..), EigenstratIndEntry(..
     readEigenstrat, writeEigenstrat, writeEigenstratIndFile, writeEigenstratSnp, writeBim, 
     writeEigenstratGeno) where
 
-import SequenceFormats.Utils (consumeProducer, SeqFormatException(..), Chrom(..), readFileProd)
+import SequenceFormats.Utils (consumeProducer, SeqFormatException(..),
+    Chrom(..), readFileProd, word)
 
 import Control.Applicative ((<|>))
 import Control.Exception (throw)
@@ -18,7 +19,6 @@ import Control.Monad (void, forM_)
 import Control.Monad.Catch (MonadThrow)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import qualified Data.Attoparsec.ByteString.Char8 as A
-import Data.Char (isSpace)
 import Data.Vector (Vector, fromList, toList)
 import qualified Data.ByteString.Char8 as B
 import Pipes (Producer, Pipe, (>->), for, cat, yield, Consumer)
@@ -74,9 +74,6 @@ bimParser = do
     void A.endOfLine
     return $ EigenstratSnpEntry (Chrom (B.unpack chrom)) pos geneticPos snpId_ ref alt
     
-word :: A.Parser B.ByteString
-word = A.takeTill isSpace
-
 eigenstratIndParser :: A.Parser EigenstratIndEntry
 eigenstratIndParser = do
     A.skipMany A.space
