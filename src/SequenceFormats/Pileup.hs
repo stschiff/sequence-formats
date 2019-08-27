@@ -1,13 +1,30 @@
 {-# LANGUAGE OverloadedStrings #-}
-module SequenceFormats.Pileup (pileupParser, processPileupEntry, PileupRow(..)) where
+module SequenceFormats.Pileup (readPileupFromStdIn, readPileupFromFile, PileupRow(..)) where
 
+import Control.Monad.Catch (MonadThrow)
+import Control.Monad.IO.Class (MonadIO)
 import qualified Data.Attoparsec.ByteString.Char8 as A
 import qualified Data.ByteString.Char8 as B
 import Data.Char (toUpper)
+import Pipes (Producer)
+import qualified Pipes.ByteString as PB
+import Pipes.Safe (MonadSafe)
 
-import SequenceFormats.Utils (Chrom(..), word)
+import SequenceFormats.Utils (Chrom(..), word, readFileProd, consumeProducer)
 
-data PileupRow = PileupRow Chrom Int Char [String]
+-- |A datatype to represent a single pileup row for multiple individuals.
+-- The constructor arguments are: Chromosome, Position, Refererence Allelele,
+-- Pileup String per individual
+data PileupRow = PileupRow Chrom Int Char [String] deriving (Eq, Show)
+
+-- |Read a pileup-formatted file from StdIn, for reading from an
+-- external command `samtools mpileup`.
+readPileupFromStdIn :: (MonadIO m, MonadThrow m) => Producer PileupRow m ()
+readPileupFromStdIn = consumeProducer pileupParser PB.stdin
+
+-- |Read pileup from a file.
+readPileupFromFile :: (MonadSafe m) => FilePath -> Producer PileupRow m ()
+readPileupFromFile = consumeProducer pileupParser . readFileProd
 
 pileupParser :: A.Parser PileupRow
 pileupParser = do

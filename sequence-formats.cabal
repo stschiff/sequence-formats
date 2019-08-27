@@ -39,5 +39,6 @@ Test-Suite sequenceFormatTests
                        SequenceFormats.FreqSum.Test,
                        SequenceFormats.RareAlleleHistogram.Test,
                        SequenceFormats.Utils.Test,
-                       SequenceFormats.VCF.Test
+                       SequenceFormats.VCF.Test,
+                       SequenceFormats.Pileup.Test
   default-language:    Haskell2010

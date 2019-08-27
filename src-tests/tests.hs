@@ -6,14 +6,16 @@ import SequenceFormats.FreqSum.Test (fsReadTest, fsWriteTest)
 import SequenceFormats.Fasta.Test (testFastaRead)
 import SequenceFormats.Utils.Test (testChromOrder)
 import SequenceFormats.VCF.Test (testReadVCF, testGetGenotypes, testGetDosages, testIsTransversionSnp, testIsBiallelicSnp, testVcfToFreqsumEntry)
+import SequenceFormats.Pileup.Test (testReadPileupFile)
 import Test.Tasty (TestTree, testGroup, defaultMain)
 import Test.Tasty.HUnit (testCase)
 
 main :: IO ()
 main = defaultMain allTests
   where
-    allTests = testGroup "Tests" [eigenstratTests, freqSumTests, fastaTests, rahTests, chromTests,
-        vcfTests]
+    allTests = testGroup "Tests" [
+        eigenstratTests, freqSumTests, fastaTests, rahTests, chromTests,
+        vcfTests, pileupTests]
 
 eigenstratTests :: TestTree
 eigenstratTests = testGroup "Eigenstrat Tests" [
@@ -46,3 +48,7 @@ vcfTests = testGroup "VCF tests" [
     testCase "VCF isTransitionSnp" testIsTransversionSnp,
     testCase "VCF isBiallelicSnp" testIsBiallelicSnp,
     testCase "VCF testVcfToFreqsumEntry" testVcfToFreqsumEntry]
+
+pileupTests :: TestTree
+pileupTests = testGroup "Pileup Tests" [
+    testCase "readPileup Test" testReadPileupFile]
