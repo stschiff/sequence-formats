@@ -26,4 +26,4 @@ V 1.3.2: Added testDat to Cabal file to make tests work off the tarball.
 
 V 1.3.2.1: Fixed a hard-coded absolute path in the test-suite.
 
-V. 1.3.3: Added Pileup as new format.
+V. 1.3.3: Added Pileup as new format. Changed all tests to Hspec.

@@ -1,0 +1,59 @@
+{-# LANGUAGE OverloadedStrings #-}
+module SequenceFormats.FreqSumSpec (spec) where
+
+import SequenceFormats.FreqSum (readFreqSumFile, printFreqSumFile, FreqSumEntry(..), 
+    FreqSumHeader(..))
+import SequenceFormats.Utils (Chrom(..))
+
+import Control.Foldl (purely, list)
+import Pipes (each, runEffect, (>->))
+import qualified Pipes.Prelude as P
+import Pipes.Safe (runSafeT)
+import Test.Hspec
+
+spec :: Spec
+spec = do
+    testReadFreqSumFile
+    testPrintFreqSumFile
+
+testReadFreqSumFile :: Spec
+testReadFreqSumFile = describe "readFreqSumFile" $ do
+    (fsHeader, fsEntries) <- runIO . runSafeT $ do
+        (fsHeader_, fsProd_) <- readFreqSumFile "testDat/example.freqsum"
+        fsEntries_ <- purely P.fold list fsProd_
+        return (fsHeader_, fsEntries_)
+    it "should read the correct fs header" $
+        fsHeader `shouldBe` mockDatFsHeader 
+    it "should read the correct fs entries" $
+        fsEntries `shouldBe` mockDatFsEntries 
+
+testPrintFreqSumFile :: Spec
+testPrintFreqSumFile = describe "printFreqSumFile" $ do
+    let fn = "/tmp/freqSumWriteTest.txt"
+        testDatFsProd = each mockDatFsEntries
+    runIO . runSafeT . runEffect $ testDatFsProd >-> printFreqSumFile fn mockDatFsHeader
+    (fsHeader, fsEntries) <- runIO . runSafeT $ do
+        (fsHeader_, fsProd_) <- readFreqSumFile fn
+        fsEntries_ <- purely P.fold list fsProd_
+        return (fsHeader_, fsEntries_)
+    it "should read the correct fs header after writing" $
+        fsHeader `shouldBe` mockDatFsHeader 
+    it "should read the correct fs entries after writing" $
+        fsEntries `shouldBe` mockDatFsEntries 
+
+mockDatFsHeader :: FreqSumHeader 
+mockDatFsHeader = FreqSumHeader names numbers
+  where
+    names = ["SAMPLE0", "SAMPLE1", "SAMPLE2", "SAMPLE3", "SAMPLE4"]
+    numbers = [2, 2, 2, 1, 1]
+
+mockDatFsEntries :: [FreqSumEntry]
+mockDatFsEntries = [
+    FreqSumEntry (Chrom "11") 0      'A' 'C' [Just 1, Just 1,  Just 1, Just 1,  Just 1],
+    FreqSumEntry (Chrom "11") 100000 'A' 'G' [Just 2, Just 1,  Just 0, Just 0,  Just 0],
+    FreqSumEntry (Chrom "11") 200000 'A' 'T' [Just 0, Just 1,  Just 1, Just 1,  Just 1],
+    FreqSumEntry (Chrom "11") 300000 'C' 'A' [Just 2, Nothing, Just 1, Just 0,  Just 0],
+    FreqSumEntry (Chrom "11") 400000 'G' 'A' [Just 0, Just 1,  Just 1, Just 1,  Just 1],
+    FreqSumEntry (Chrom "11") 500000 'T' 'A' [Just 2, Just 2,  Just 1, Nothing, Just 1],
+    FreqSumEntry (Chrom "11") 600000 'G' 'T' [Just 0, Just 0,  Just 1, Nothing, Nothing]]
+
