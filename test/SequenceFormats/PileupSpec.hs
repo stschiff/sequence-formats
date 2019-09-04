@@ -1,6 +1,6 @@
 module SequenceFormats.PileupSpec (spec) where
 
-import SequenceFormats.Pileup (readPileupFromFile, PileupRow(..))
+import SequenceFormats.Pileup (readPileupFromFile, PileupRow(..), Strand(..))
 import SequenceFormats.Utils (Chrom(..))
 
 import Control.Foldl (purely, list)
@@ -19,6 +19,12 @@ testReadPileupFromFile = describe "readPileupFromFile" $
 
 mockDatPentries :: [PileupRow]
 mockDatPentries = [
-    PileupRow (Chrom "1") 1000 'A' ["ACCT", "AAA", "ACCAACC"],
-    PileupRow (Chrom "1") 2000 'C' ["GGCA", "ACT", "ACCAACC"],
-    PileupRow (Chrom "2") 1000 'G' ["AGCT", "AAA", "ACCAACC"]]
+    PileupRow (Chrom "1") 1000 'A' ["AAACA", "AAAC", "AAAACCAACA"]
+        [[f, f, r, f, f], [f, f, r, r], [r, r, f, r, r, r, f, f, r, f]], 
+    PileupRow (Chrom "1") 2000 'C' ["CCCA", "ACTCC", "CACACCCC"]
+        [[f, f, f, r], [f, f, r, f, f], [f, r, f, r, f, f, f, f]],
+    PileupRow (Chrom "2") 1000 'G' ["GGGGGGGCG", "GGG", "GGGGGG"]
+        [[r, r, f, r, r, f, f, f, f], [f, r, r], [f, r, r, f, r, r]]]
+  where
+    f = ForwardStrand
+    r = ReverseStrand

@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module SequenceFormats.Pileup (readPileupFromStdIn, readPileupFromFile, PileupRow(..)) where
+module SequenceFormats.Pileup (readPileupFromStdIn, readPileupFromFile, PileupRow(..), Strand(..)) where
 
 import Control.Monad.Catch (MonadThrow)
 import Control.Monad.IO.Class (MonadIO)
@@ -12,10 +12,19 @@ import Pipes.Safe (MonadSafe)
 
 import SequenceFormats.Utils (Chrom(..), word, readFileProd, consumeProducer)
 
+-- |A datatype to represent the strand orientation of a single base.
+data Strand = ForwardStrand | ReverseStrand deriving (Eq, Show)
+
 -- |A datatype to represent a single pileup row for multiple individuals.
 -- The constructor arguments are: Chromosome, Position, Refererence Allelele,
 -- Pileup String per individual
-data PileupRow = PileupRow Chrom Int Char [String] deriving (Eq, Show)
+data PileupRow = PileupRow {
+    pileupChrom :: Chrom, -- ^The chromosome
+    pileupPos :: Int, -- ^The position
+    pileupRef :: Char, -- ^The reference base
+    pileupBases :: [String], -- ^The base string
+    pileupStrandInfo :: [[Strand]]
+ } deriving (Eq, Show)
 
 -- |Read a pileup-formatted file from StdIn, for reading from an
 -- external command `samtools mpileup`.
@@ -36,10 +45,12 @@ pileupParser = do
      -- for some reason, there is an M in the human reference at
      -- position 3:60830534 (both in hs37d5 and in hg19)
     _ <- A.space
-    entries <- parsePileupPerSample refA `A.sepBy1`
+    baseAndStrandEntries <- parsePileupPerSample refA `A.sepBy1`
         A.satisfy (\c -> c == ' ' || c == '\t')
     A.endOfLine
-    let ret = PileupRow (Chrom $ B.unpack chrom) pos refA entries
+    let baseStrings = map fst baseAndStrandEntries
+        strandInfoStrings = map snd baseAndStrandEntries
+    let ret = PileupRow (Chrom $ B.unpack chrom) pos refA baseStrings strandInfoStrings
     --trace (show ret) $ return ret
     return ret
   where
@@ -47,13 +58,17 @@ pileupParser = do
         processPileupEntry refA <$> A.decimal <* A.space <*> (B.unpack <$> word) <*
             A.space <* word
 
-processPileupEntry :: Char -> Int -> String -> String
+processPileupEntry :: Char -> Int -> String -> (String, [Strand])
 processPileupEntry refA cov readBaseString =
-    if cov == 0 then "" else go readBaseString
+    if cov == 0 then ("", []) else
+        let res = go readBaseString
+        in  (map fst res, map snd res)
   where
     go (x:xs)
-        | (x == '.' || x == ',') = refA : go xs
-        | x `elem` ("ACTGNactgn" :: String) = toUpper x : go xs
+        | x == '.' = (refA, ForwardStrand) : go xs
+        | x == ',' = (refA, ReverseStrand) : go xs
+        | x `elem` ("ACTGN" :: String) = (x, ForwardStrand) : go xs
+        | x `elem` ("actgn" :: String) = (toUpper x, ReverseStrand) : go xs
         | x `elem` ("$*" :: String) = go xs
         | x == '^' = go (drop 1 xs)
         | (x == '+' || x == '-') =
