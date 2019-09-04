@@ -8,7 +8,7 @@ module SequenceFormats.Utils (liftParsingErrors,
                               Chrom(..), word) where
 
 import Control.Error (readErr)
-import Control.Exception (Exception)
+import Control.Exception (Exception, throw)
 import Control.Monad.Catch (MonadThrow, throwM)
 import Control.Monad.Trans.Class (lift)
 import qualified Data.Attoparsec.ByteString.Char8 as A
@@ -21,6 +21,12 @@ import qualified Pipes.Safe as PS
 import qualified Pipes.Safe.Prelude as PS
 import System.IO (IOMode(..))
 
+-- |An exception type for parsing BioInformatic file formats.
+data SeqFormatException = SeqFormatException String
+    deriving (Show, Eq)
+
+instance Exception SeqFormatException
+
 -- |A wrapper datatype for Chromosome names.
 newtype Chrom = Chrom {unChrom :: String} deriving (Eq)
 
@@ -31,20 +37,20 @@ instance Show Chrom where
 -- |Ord instance for Chrom
 instance Ord Chrom where
     compare (Chrom c1) (Chrom c2) = 
-        let c1' = if take 3 c1 == "chr" then drop 3 c1 else c1
-            c2' = if take 3 c2 == "chr" then drop 3 c2 else c2
-        in  case (,) <$> readChrom c1' <*> readChrom c2' of
-                Left e -> error e
+        let [c1NoChr, c2NoChr] = map removeChr [c1, c2]
+            [c1XYMTconvert, c2XYMTconvert] = map convertXYMT [c1NoChr, c2NoChr]
+        in  case (,) <$> readChrom c1XYMTconvert <*> readChrom c2XYMTconvert of
+                Left e -> throw $ SeqFormatException e
                 Right (cn1, cn2) -> cn1 `compare` cn2
-
-readChrom :: String -> Either String Int
-readChrom c = readErr ("cannot parse chromosome " ++ c) $ c
-
--- |An exception type for parsing BioInformatic file formats.
-data SeqFormatException = SeqFormatException String
-    deriving Show
-
-instance Exception SeqFormatException
+      where
+        removeChr c = if take 3 c == "chr" then drop 3 c else c
+        convertXYMT c = case c of
+            "X"  -> "23"
+            "Y"  -> "24"
+            "MT" -> "90"
+            n    -> n
+        readChrom :: String -> Either String Int
+        readChrom c = readErr ("cannot parse chromosome " ++ c) $ c
 
 -- |A function to help with reporting parsing errors to stderr. Returns a clean Producer over the 
 -- parsed datatype.
