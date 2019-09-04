@@ -161,5 +161,5 @@ vcfToFreqSumEntry vcfEntry = do
     let alt = B.head . head . vcfAlt $ vcfEntry
     assertErr "Invalid Reference Allele" $ ref `elem` ['A', 'C', 'T', 'G', 'N']
     assertErr "Invalid Alternative Allele" $ alt `elem` ['A', 'C', 'T', 'G', '.']
-    return $ FreqSumEntry (vcfChrom vcfEntry) (vcfPos vcfEntry) ref alt dosages
+    return $ FreqSumEntry (vcfChrom vcfEntry) (vcfPos vcfEntry) (B.unpack <$> vcfId vcfEntry) ref alt dosages
     

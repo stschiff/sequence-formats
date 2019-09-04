@@ -41,6 +41,7 @@ freqSumHeaderToText (FreqSumHeader names nCounts) =
 data FreqSumEntry = FreqSumEntry {
     fsChrom  :: Chrom, -- ^The chromosome of the site
     fsPos    :: Int, -- ^The position of the site
+    fsSnpId  :: Maybe String, -- ^An optional parameter to take the snpId. This is not parsed from or printed to freqSum format but is used in internal conversions from Eigenstrat.
     fsRef    :: Char, -- ^The reference allele
     fsAlt    :: Char, -- ^The alternative allele
     fsCounts :: [Maybe Int] -- ^A list of allele counts in each group. Nothing denotes missing data.
@@ -48,7 +49,7 @@ data FreqSumEntry = FreqSumEntry {
 
 -- |This function converts a single freqSum entry to a printable freqSum line.
 freqSumEntryToText :: FreqSumEntry -> B.ByteString
-freqSumEntryToText (FreqSumEntry chrom pos ref alt maybeCounts) =
+freqSumEntryToText (FreqSumEntry chrom pos _ ref alt maybeCounts) =
     B.intercalate "\t" [B.pack (unChrom chrom), B.pack (show pos), B.singleton ref, B.singleton alt, countStr] <> "\n"
   where
     countStr = B.intercalate "\t" . map (B.pack . show . convertToNum) $ maybeCounts 
@@ -84,7 +85,7 @@ parseFreqSumHeader = do
 
 parseFreqSumEntry :: A.Parser FreqSumEntry
 parseFreqSumEntry = FreqSumEntry <$> (Chrom . B.unpack <$> A.takeTill isSpace) <* A.skipSpace <*> A.decimal <*
-    A.skipSpace <*> base <* A.skipSpace <*> baseOrDot <* A.skipSpace <*> counts <* A.endOfLine
+    A.skipSpace <*> pure Nothing <*> base <* A.skipSpace <*> baseOrDot <* A.skipSpace <*> counts <* A.endOfLine
   where
     counts = (parseMissing <|> parseCount) `A.sepBy` A.char '\t'
     parseMissing = A.string "-1" *> pure Nothing
