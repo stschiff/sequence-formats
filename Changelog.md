@@ -32,3 +32,5 @@ V 1.4.0: Added three features:
     - Chromosomes now include X, Y and MT (or chrX, chrY, chrMT), in that order after chr22. 
     - SNP rsId information is now internally included as an option in the FreqSum data format.
     - Pileup Format now also records strand orientation
+
+V 1.4.0.1: Added test file example.pileup to cabal extra-source-files to make tests work.

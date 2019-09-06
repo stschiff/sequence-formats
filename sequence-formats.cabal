@@ -1,5 +1,5 @@
 name:                sequence-formats
-version:             1.4.0
+version:             1.4.0.1
 synopsis:            A package with basic parsing utilities for several Bioinformatic data formats.
 description:         Contains utilities to parse and write Eigenstrat, Fasta, FreqSum, VCF and other file formats used in population genetics analyses.
 license:             GPL-3
@@ -9,9 +9,17 @@ maintainer:          stephan.schiffels@mac.com
 category:            Bioinformatics
 build-type:          Simple
 cabal-version:       >=1.10
-extra-source-files:  README.md, Changelog.md, testDat/example.bim, testDat/example.eigenstratgeno, testDat/example.fasta,
-                     testDat/example.freqsum, testDat/example.histogram.txt, testDat/example.ind, testDat/example.snp,
-                     testDat/example.vcf
+extra-source-files:  README.md,
+                     Changelog.md,
+                     testDat/example.bim,
+                     testDat/example.eigenstratgeno,
+                     testDat/example.fasta,
+                     testDat/example.freqsum,
+                     testDat/example.histogram.txt,
+                     testDat/example.ind,
+                     testDat/example.snp,
+                     testDat/example.vcf,
+                     testDat/example.pileup
 
 library
   exposed-modules:     SequenceFormats.RareAlleleHistogram,
