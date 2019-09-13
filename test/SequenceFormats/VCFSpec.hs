@@ -74,7 +74,7 @@ testIsTransversionSnp = describe "isTransversionSnp" $ do
 testVcfToFreqsumEntry :: Spec
 testVcfToFreqsumEntry = describe "vcfToFreqsumEntry" $
     it "should convert correctly" $ do
-        let r = Right (FreqSumEntry (Chrom "1") 10492 (Just "testId") 'C' 'T' [Just 0, Just 0, Just 1, Just 0, Just 0])
+        let r = Right (FreqSumEntry (Chrom "1") 10492 (Just "testId") Nothing 'C' 'T' [Just 0, Just 0, Just 1, Just 0, Just 0])
         vcfToFreqSumEntry vcf1 `shouldBe` r
 
 testIsBiallelicSnp :: Spec

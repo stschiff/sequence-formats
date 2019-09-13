@@ -28,11 +28,11 @@ data SeqFormatException = SeqFormatException String
 instance Exception SeqFormatException
 
 -- |A wrapper datatype for Chromosome names.
-newtype Chrom = Chrom {unChrom :: String} deriving (Eq)
+newtype Chrom = Chrom {unChrom :: B.ByteString} deriving (Eq)
 
 -- |Show instance for Chrom
 instance Show Chrom where
-    show (Chrom c) = show c
+    show (Chrom c) = B.unpack c
 
 -- |Ord instance for Chrom
 instance Ord Chrom where
@@ -40,17 +40,19 @@ instance Ord Chrom where
         let [c1NoChr, c2NoChr] = map removeChr [c1, c2]
             [c1XYMTconvert, c2XYMTconvert] = map convertXYMT [c1NoChr, c2NoChr]
         in  case (,) <$> readChrom c1XYMTconvert <*> readChrom c2XYMTconvert of
-                Left e -> throw $ SeqFormatException e
+                Left e -> throw e
                 Right (cn1, cn2) -> cn1 `compare` cn2
       where
-        removeChr c = if take 3 c == "chr" then drop 3 c else c
+        removeChr :: B.ByteString -> B.ByteString
+        removeChr c = if B.take 3 c == "chr" then B.drop 3 c else c
+        convertXYMT :: B.ByteString -> B.ByteString
         convertXYMT c = case c of
             "X"  -> "23"
             "Y"  -> "24"
             "MT" -> "90"
             n    -> n
-        readChrom :: String -> Either String Int
-        readChrom c = readErr ("cannot parse chromosome " ++ c) $ c
+        readChrom :: B.ByteString -> Either SeqFormatException Int
+        readChrom c = readErr (SeqFormatException $ "cannot parse chromosome " ++ B.unpack c) . B.unpack $ c
 
 -- |A function to help with reporting parsing errors to stderr. Returns a clean Producer over the 
 -- parsed datatype.

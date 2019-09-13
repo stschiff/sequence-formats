@@ -27,7 +27,7 @@ import System.IO (IOMode(..))
 
 -- |A Datatype representing the Header
 data FreqSumHeader = FreqSumHeader {
-    fshNames :: [B.ByteString], -- ^A list of individual or group names
+    fshNames :: [String], -- ^A list of individual or group names
     fshCounts :: [Int] -- ^A list of haplotype counts per individual/group.
 } deriving (Eq, Show)
 
@@ -35,13 +35,14 @@ freqSumHeaderToText :: FreqSumHeader -> B.ByteString
 freqSumHeaderToText (FreqSumHeader names nCounts) =
     "#CHROM\tPOS\tREF\tALT\t" <> B.intercalate "\t" tuples <> "\n"
   where
-    tuples = zipWith (\n c -> n <> "(" <> B.pack (show c) <> ")") names nCounts
+    tuples = zipWith (\n c -> B.pack n <> "(" <> B.pack (show c) <> ")") names nCounts
 
 -- |A Datatype to denote a single freqSum line
 data FreqSumEntry = FreqSumEntry {
     fsChrom  :: Chrom, -- ^The chromosome of the site
     fsPos    :: Int, -- ^The position of the site
-    fsSnpId  :: Maybe String, -- ^An optional parameter to take the snpId. This is not parsed from or printed to freqSum format but is used in internal conversions from Eigenstrat.
+    fsSnpId  :: Maybe B.ByteString, -- ^An optional parameter to take the snpId. This is not parsed from or printed to freqSum format but is used in internal conversions from Eigenstrat.
+    fsGeneticPos :: Maybe Double, -- ^An optional parameter to take the genetic pos. This is not parsed from or printed to freqSum format but is used in internal conversions from Eigenstrat.
     fsRef    :: Char, -- ^The reference allele
     fsAlt    :: Char, -- ^The alternative allele
     fsCounts :: [Maybe Int] -- ^A list of allele counts in each group. Nothing denotes missing data.
@@ -49,8 +50,8 @@ data FreqSumEntry = FreqSumEntry {
 
 -- |This function converts a single freqSum entry to a printable freqSum line.
 freqSumEntryToText :: FreqSumEntry -> B.ByteString
-freqSumEntryToText (FreqSumEntry chrom pos _ ref alt maybeCounts) =
-    B.intercalate "\t" [B.pack (unChrom chrom), B.pack (show pos), B.singleton ref, B.singleton alt, countStr] <> "\n"
+freqSumEntryToText (FreqSumEntry chrom pos _ _ ref alt maybeCounts) =
+    B.intercalate "\t" [unChrom chrom, B.pack (show pos), B.singleton ref, B.singleton alt, countStr] <> "\n"
   where
     countStr = B.intercalate "\t" . map (B.pack . show . convertToNum) $ maybeCounts 
     convertToNum Nothing = -1
@@ -79,13 +80,13 @@ parseFreqSumHeader = do
     tuples <- A.string "#CHROM\tPOS\tREF\tALT\t" >> A.sepBy' tuple A.space <* A.endOfLine
     let names = map fst tuples
         counts = map snd tuples
-    return $ FreqSumHeader names counts
+    return $ FreqSumHeader (map B.unpack names) counts
   where
     tuple = (,) <$> A.takeWhile (\c -> isAlphaNum c || c == '_' || c == '-') <* A.char '(' <*> A.decimal <* A.char ')'
 
 parseFreqSumEntry :: A.Parser FreqSumEntry
-parseFreqSumEntry = FreqSumEntry <$> (Chrom . B.unpack <$> A.takeTill isSpace) <* A.skipSpace <*> A.decimal <*
-    A.skipSpace <*> pure Nothing <*> base <* A.skipSpace <*> baseOrDot <* A.skipSpace <*> counts <* A.endOfLine
+parseFreqSumEntry = FreqSumEntry <$> (Chrom <$> A.takeTill isSpace) <* A.skipSpace <*> A.decimal <*
+    A.skipSpace <*> pure Nothing <*> pure Nothing <*> base <* A.skipSpace <*> baseOrDot <* A.skipSpace <*> counts <* A.endOfLine
   where
     counts = (parseMissing <|> parseCount) `A.sepBy` A.char '\t'
     parseMissing = A.string "-1" *> pure Nothing

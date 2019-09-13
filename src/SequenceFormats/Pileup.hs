@@ -50,18 +50,17 @@ pileupParser = do
     A.endOfLine
     let baseStrings = map fst baseAndStrandEntries
         strandInfoStrings = map snd baseAndStrandEntries
-    let ret = PileupRow (Chrom $ B.unpack chrom) pos refA baseStrings strandInfoStrings
+    let ret = PileupRow (Chrom chrom) pos refA baseStrings strandInfoStrings
     --trace (show ret) $ return ret
     return ret
   where
     parsePileupPerSample refA =
-        processPileupEntry refA <$> A.decimal <* A.space <*> (B.unpack <$> word) <*
-            A.space <* word
+        processPileupEntry refA <$> A.decimal <* A.space <*> word <* A.space <* word
 
-processPileupEntry :: Char -> Int -> String -> (String, [Strand])
+processPileupEntry :: Char -> Int -> B.ByteString -> (String, [Strand])
 processPileupEntry refA cov readBaseString =
     if cov == 0 then ("", []) else
-        let res = go readBaseString
+        let res = go (B.unpack readBaseString)
         in  (map fst res, map snd res)
   where
     go (x:xs)

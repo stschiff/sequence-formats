@@ -91,11 +91,11 @@ vcfHeaderParser = VCFheader <$> A.many1' doubleCommentLine <*> singleCommentLine
 vcfEntryParser :: A.Parser VCFentry
 vcfEntryParser = vcfEntryParserFull <|> vcfEntryParserTruncated
   where
-    vcfEntryParserFull = VCFentry <$> (Chrom . B.unpack <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
+    vcfEntryParserFull = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
         sp <*> word <* sp <*> parseAlternativeAlleles <* sp <*> A.double <* sp <*> parseFilter <* 
         sp <*> parseInfoFields <* sp <*> parseFormatStrings <* sp <*> parseGenotypeInfos <* 
         A.endOfLine
-    vcfEntryParserTruncated = VCFentry <$> (Chrom . B.unpack <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
+    vcfEntryParserTruncated = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
         sp <*> word <* sp <*> parseAlternativeAlleles <* sp <*> A.double <* sp <*> parseFilter <*
         sp <*> parseInfoFields <*> pure [] <*> pure [] <* A.endOfLine
     sp = A.satisfy (\c -> c == ' ' || c == '\t')
@@ -161,5 +161,5 @@ vcfToFreqSumEntry vcfEntry = do
     let alt = B.head . head . vcfAlt $ vcfEntry
     assertErr "Invalid Reference Allele" $ ref `elem` ['A', 'C', 'T', 'G', 'N']
     assertErr "Invalid Alternative Allele" $ alt `elem` ['A', 'C', 'T', 'G', '.']
-    return $ FreqSumEntry (vcfChrom vcfEntry) (vcfPos vcfEntry) (B.unpack <$> vcfId vcfEntry) ref alt dosages
+    return $ FreqSumEntry (vcfChrom vcfEntry) (vcfPos vcfEntry) (vcfId vcfEntry) Nothing ref alt dosages
     

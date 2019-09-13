@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module SequenceFormats.PileupSpec (spec) where
 
 import SequenceFormats.Pileup (readPileupFromFile, PileupRow(..), Strand(..))

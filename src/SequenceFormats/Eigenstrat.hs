@@ -61,7 +61,7 @@ eigenstratSnpParser = do
     ref <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGN")
     alt <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGX")
     void A.endOfLine
-    return $ EigenstratSnpEntry (Chrom (B.unpack chrom)) pos geneticPos snpId_ ref alt
+    return $ EigenstratSnpEntry (Chrom chrom) pos geneticPos snpId_ ref alt
 
 bimParser :: A.Parser EigenstratSnpEntry
 bimParser = do
@@ -72,7 +72,7 @@ bimParser = do
     ref <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGN")
     alt <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGX")
     void A.endOfLine
-    return $ EigenstratSnpEntry (Chrom (B.unpack chrom)) pos geneticPos snpId_ ref alt
+    return $ EigenstratSnpEntry (Chrom chrom) pos geneticPos snpId_ ref alt
     
 eigenstratIndParser :: A.Parser EigenstratIndEntry
 eigenstratIndParser = do
@@ -169,7 +169,7 @@ writeEigenstratSnp :: (MonadIO m) => Handle -- ^The Eigenstrat Snp File Handle.
 writeEigenstratSnp snpFileH =
     let snpOutTextConsumer = PB.toHandle snpFileH
         toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt) ->
-            let snpLine = B.intercalate "\t" [gid, B.pack (unChrom chrom), B.pack (show gpos),
+            let snpLine = B.intercalate "\t" [gid, unChrom chrom, B.pack (show gpos),
                     B.pack (show pos), B.singleton ref, B.singleton alt]
             in  snpLine <> "\n")
     in  toTextPipe >-> snpOutTextConsumer
@@ -180,7 +180,7 @@ writeBim :: (MonadIO m) => Handle -- ^The Eigenstrat Snp File handle.
 writeBim snpFileH =
     let snpOutTextConsumer = PB.toHandle snpFileH
         toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt) ->
-            B.intercalate "\t" [B.pack (unChrom chrom), gid, B.pack (show gpos), B.pack (show pos), B.singleton ref, B.singleton alt])
+            B.intercalate "\t" [unChrom chrom, gid, B.pack (show gpos), B.pack (show pos), B.singleton ref, B.singleton alt])
     in  toTextPipe >-> snpOutTextConsumer
 
 -- |Function to write an Eigentrat Geno File. Returns a consumer expecting Eigenstrat Genolines.

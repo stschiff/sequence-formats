@@ -31,7 +31,7 @@ loadFastaChrom refFileHandle chrom = do
   where
     go prod = do
         (chrom_, prod') <- readNextFastaEntry prod
-        hPutStr stderr ("found chromosome " <> unChrom chrom_)
+        hPutStr stderr ("found chromosome " <> show chrom_)
         if chrom_ == chrom
         then return (void prod')
         else do
@@ -63,4 +63,4 @@ fastaHeaderLineParser = do
     A.skipSpace
     A.skipWhile (\c -> c /= '\n' && c /= '\r')
     A.endOfLine
-    return . Chrom . B.unpack $ chrom
+    return . Chrom $ chrom

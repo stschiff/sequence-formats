@@ -26,7 +26,7 @@ import System.IO (Handle, IOMode(..), withFile)
 
 -- |A datatype to represent an Allele Sharing Histogram:
 data RareAlleleHistogram = RareAlleleHistogram {
-    raNames :: [B.ByteString], -- ^A list of branch names
+    raNames :: [String], -- ^A list of branch names
     raNVec :: [Int], -- ^A list of haploid sample sizes.
     raMinAf :: Int, -- ^The minimum allele count
     raMaxAf :: Int, -- ^The maximum allele count
@@ -56,7 +56,7 @@ showHistogram hist = do
         null (raConditionOn hist)
     assertErr "can only print histogram with no exclude pattern due to format-legacy" $
         null (raExcludePatterns hist)
-    let head0 = "NAMES=" <> (B.intercalate "," . raNames $ hist)
+    let head0 = "NAMES=" <> (B.intercalate "," . map B.pack . raNames $ hist)
         head1 = "N=" <> (B.pack . intercalate "," . map show . raNVec $ hist)
         head2 = "MAX_M=" <> (B.pack . show . raMaxAf $ hist)
         head3 = "TOTAL_SITES=" <> (B.pack . show . raTotalNrSites $ hist)
@@ -111,7 +111,7 @@ parseHistogram = do
             (_, _, Just _) -> Just . Map.fromList $ [(k, (jkMean, jkSE)) |
                                                      (k, _, Just (jkMean, jkSE)) <- body]
             _ -> Nothing
-    return $ RareAlleleHistogram names nVec 1 maxM [][] totalNrSites countHist jkHist
+    return $ RareAlleleHistogram (map B.unpack names) nVec 1 maxM [][] totalNrSites countHist jkHist
   where
     parseNames = A.string "NAMES=" *> name `A.sepBy1` A.char ',' <* A.endOfLine
     name = A.takeWhile1 (\c -> isAlphaNum c || c == '_' || c == '-')

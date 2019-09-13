@@ -29,8 +29,12 @@ V 1.3.2.1: Fixed a hard-coded absolute path in the test-suite.
 V 1.3.3: Added Pileup as new format. Changed all tests to Hspec.
 
 V 1.4.0: Added three features:
-    - Chromosomes now include X, Y and MT (or chrX, chrY, chrMT), in that order after chr22. 
-    - SNP rsId information is now internally included as an option in the FreqSum data format.
-    - Pileup Format now also records strand orientation
+* Chromosomes now include `X`, `Y` and `MT` (or `chrX`, `chrY`, `chrMT`), in that order after `chr22`. 
+* SNP rsId information is now internallyincluded as an option in the FreqSum data format.
+* Pileup Format now also records strandorientation
 
 V 1.4.0.1: Added test file example.pileup to cabal extra-source-files to make tests work.
+
+V 1.4.1:
+* Added optional genetic position to FreqSumformat,
+* changed various internal strings toByteStrings and vice versa.
