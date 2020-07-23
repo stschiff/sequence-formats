@@ -43,3 +43,11 @@ testReadFamFile :: Spec
 testReadFamFile = describe "readFamFile" $
     it "should read a FAM file correctly" $ do
         readFamFile "testDat/example.fam" `shouldReturn` mockDatEigenstratInd
+
+testPlinkFiles :: Spec
+testPlinkFiles = describe "readPlinkFiles" $ 
+    it "should read genotypes correctly" $ do
+        let bedFile = "testDat/example.plink.bed"
+            bimFile = "testDat/example.plink.bim"
+            famFile = "testDat/example.plink.fam"
+        readPlink bedFile bimFile famFile
