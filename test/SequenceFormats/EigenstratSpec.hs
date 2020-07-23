@@ -7,14 +7,13 @@ import Data.Vector (fromList)
 import Pipes (each, runEffect, (>->))
 import qualified Pipes.Prelude as P
 import Pipes.Safe (runSafeT)
-import SequenceFormats.Eigenstrat (readEigenstrat, writeEigenstrat, readBimFile,
+import SequenceFormats.Eigenstrat (readEigenstrat, writeEigenstrat,
     EigenstratSnpEntry(..), EigenstratIndEntry(..), GenoLine, Sex(..), GenoEntry(..))
 import SequenceFormats.Utils (Chrom(..))
 import Test.Hspec
 
 spec :: Spec
 spec = do
-    testReadBimFile
     testReadEigenstrat
     testWriteEigenstrat
 
@@ -27,12 +26,6 @@ mockDatEigenstratSnp = [
     EigenstratSnpEntry (Chrom "11") 400000 0.004000 "rs4444" 'G' 'A',
     EigenstratSnpEntry (Chrom "11") 500000 0.005000 "rs5555" 'T' 'A',
     EigenstratSnpEntry (Chrom "11") 600000 0.006000 "rs6666" 'G' 'T']
-
-testReadBimFile :: Spec
-testReadBimFile = describe "readBimFile" $
-    it "should read a BIM file correctly" $ do
-        let esSnpProd = readBimFile "testDat/example.bim"
-        (runSafeT $ purely P.fold list esSnpProd) `shouldReturn` mockDatEigenstratSnp
 
 mockDatEigenstratInd :: [EigenstratIndEntry]
 mockDatEigenstratInd = [
