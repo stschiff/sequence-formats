@@ -1,19 +1,22 @@
 {-# LANGUAGE OverloadedStrings #-}
 module SequenceFormats.PlinkSpec (spec) where
 
-import SequenceFormats.Eigenstrat (EigenstratSnpEntry(..), EigenstratIndEntry(..), Sex(..))
-import SequenceFormats.Plink (readBimFile, readFamFile)
-import SequenceFormats.Utils (Chrom(..))
+import           SequenceFormats.Eigenstrat (EigenstratIndEntry (..),
+                                             EigenstratSnpEntry (..), Sex (..), GenoLine, GenoEntry(..))
+import           SequenceFormats.Plink      (readBimFile, readFamFile, readPlinkBedFile)
+import           SequenceFormats.Utils      (Chrom (..))
 
-import Control.Foldl (purely, list)
-import qualified Pipes.Prelude as P
-import Pipes.Safe (runSafeT)
-import Test.Hspec
+import           Control.Foldl              (list, purely)
+import           Data.Vector                (fromList)
+import qualified Pipes.Prelude              as P
+import           Pipes.Safe                 (runSafeT)
+import           Test.Hspec
 
 spec :: Spec
 spec = do
     testReadBimFile
     testReadFamFile
+    testReadBedFile
 
 mockDatEigenstratSnp :: [EigenstratSnpEntry]
 mockDatEigenstratSnp = [
@@ -33,6 +36,16 @@ mockDatEigenstratInd = [
     EigenstratIndEntry "SAMPLE3" Male "4",
     EigenstratIndEntry "SAMPLE4" Female "5"]
 
+mockDatPlinkBed :: [GenoLine]
+mockDatPlinkBed = [
+    fromList [Het,    Het,    Het,    HomAlt, HomAlt],
+    fromList [HomAlt, Het,    HomRef, Het,    HomRef],
+    fromList [HomRef, Het,    Het,    HomAlt, Het],
+    fromList [HomAlt, HomAlt, Het,    HomRef, HomRef],
+    fromList [HomRef, Het,    Het,    HomAlt, HomAlt],
+    fromList [HomAlt, HomAlt, Het,    Het,    Het],
+    fromList [HomRef, HomRef, Het,    Het,    HomAlt]]
+
 testReadBimFile :: Spec
 testReadBimFile = describe "readBimFile" $
     it "should read a BIM file correctly" $ do
@@ -44,10 +57,11 @@ testReadFamFile = describe "readFamFile" $
     it "should read a FAM file correctly" $ do
         readFamFile "testDat/example.fam" `shouldReturn` mockDatEigenstratInd
 
-testPlinkFiles :: Spec
-testPlinkFiles = describe "readPlinkFiles" $ 
+testReadBedFile :: Spec
+testReadBedFile = describe "readBedFile" $
     it "should read genotypes correctly" $ do
-        let bedFile = "testDat/example.plink.bed"
-            bimFile = "testDat/example.plink.bim"
-            famFile = "testDat/example.plink.fam"
-        readPlink bedFile bimFile famFile
+        let fn = "testDat/example.plink.bed"
+        bedDat <- runSafeT $ do
+            bedProd <- readPlinkBedFile fn 5
+            purely P.fold list bedProd
+        bedDat `shouldBe` mockDatPlinkBed
