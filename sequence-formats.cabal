@@ -23,6 +23,10 @@ extra-source-files:  README.md,
                      testDat/example.snp,
                      testDat/example.vcf,
                      testDat/example.pileup
+                     testDat/example.fam
+                     testDat/example.plink.bed
+                     testDat/example.plink.fam
+                     testDat/example.plink.bim
 
 library
   exposed-modules:     SequenceFormats.RareAlleleHistogram,
