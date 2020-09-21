@@ -1,6 +1,6 @@
 {-# LANGUAGE BinaryLiterals    #-}
 {-# LANGUAGE OverloadedStrings #-}
-module SequenceFormats.Plink (readBimStdIn, readBimFile, writeBim, readFamFile, readPlinkBedFile) where
+module SequenceFormats.Plink (readBimStdIn, readBimFile, writeBim, readFamFile, readPlinkBedFile, readPlink) where
 
 import           SequenceFormats.Eigenstrat       (EigenstratIndEntry (..),
                                                    EigenstratSnpEntry (..),
@@ -24,7 +24,7 @@ import           Pipes                            (Consumer, Producer, (>->))
 import           Pipes.Attoparsec                 (ParsingError (..), parse)
 import qualified Pipes.ByteString                 as PB
 import qualified Pipes.Prelude                    as P
-import           Pipes.Safe                       (MonadSafe, runSafeT)
+import           Pipes.Safe                       (MonadSafe)
 import qualified Pipes.Safe.Prelude
 import           System.IO                        (Handle, IOMode (..),
                                                    withFile)

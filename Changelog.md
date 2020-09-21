@@ -1,3 +1,5 @@
+V 1.5.1.2: added readPlink to export list of Plink module.
+
 V 1.5.1: minor updates for hackage
 
 V 1.5.0: Added Plink support.
