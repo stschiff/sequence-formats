@@ -36,8 +36,8 @@ bimParser = do
     snpId_     <- A.skipMany1 A.space >> word
     geneticPos <- A.skipMany1 A.space >> A.double
     pos        <- A.skipMany1 A.space >> A.decimal
-    ref        <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGN")
-    alt        <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGX")
+    ref        <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGN01234")
+    alt        <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGX01234")
     void A.endOfLine
     return $ EigenstratSnpEntry (Chrom chrom) pos geneticPos snpId_ ref alt
 

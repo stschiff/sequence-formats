@@ -1,3 +1,5 @@
+V 1.5.1.3: added possibility to parse allele names 01234 in bim files.
+
 V 1.5.1.2: added readPlink to export list of Plink module.
 
 V 1.5.1: minor updates for hackage
