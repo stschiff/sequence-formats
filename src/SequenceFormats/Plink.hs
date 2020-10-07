@@ -39,7 +39,16 @@ bimParser = do
     ref        <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGN01234")
     alt        <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGX01234")
     void A.endOfLine
-    return $ EigenstratSnpEntry (Chrom chrom) pos geneticPos snpId_ ref alt
+    let refConvert = convertNum ref
+        altConvert = convertNum alt
+    return $ EigenstratSnpEntry (Chrom chrom) pos geneticPos snpId_ refConvert altConvert
+  where
+    convertNum '0' = 'N'
+    convertNum '1' = 'A'
+    convertNum '2' = 'C'
+    convertNum '3' = 'G'
+    convertNum '4' = 'T'
+    convertNum x   = x
 
 famParser :: A.Parser EigenstratIndEntry
 famParser = do
