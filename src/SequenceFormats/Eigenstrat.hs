@@ -71,8 +71,8 @@ eigenstratSnpParser = do
     chrom <- A.skipMany1 A.space >> word
     geneticPos <- A.skipMany1 A.space >> A.double
     pos <- A.skipMany1 A.space >> A.decimal
-    ref <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGN")
-    alt <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGX")
+    ref <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGNX")
+    alt <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGNX")
     void A.endOfLine
     return $ EigenstratSnpEntry (Chrom chrom) pos geneticPos snpId_ ref alt
 
