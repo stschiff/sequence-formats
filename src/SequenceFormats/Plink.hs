@@ -1,6 +1,6 @@
 {-# LANGUAGE BinaryLiterals    #-}
 {-# LANGUAGE OverloadedStrings #-}
-module SequenceFormats.Plink (readBimStdIn, readBimFile, writeBim, readFamFile, readPlinkBedFile, readPlink) where
+module SequenceFormats.Plink (readBimStdIn, readBimFile, writeBim, readFamFile, readPlinkBedFile, readPlink, writePlink) where
 
 import           SequenceFormats.Eigenstrat       (EigenstratIndEntry (..),
                                                    EigenstratSnpEntry (..),
@@ -10,24 +10,26 @@ import           SequenceFormats.Utils            (Chrom (..), consumeProducer,
                                                    readFileProd, word)
 
 import           Control.Applicative              ((<|>))
-import           Control.Monad                    (void)
+import           Control.Monad                    (forM_, void)
 import           Control.Monad.Catch              (MonadThrow, throwM)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
+import           Control.Monad.Trans.Class        (lift)
 import           Control.Monad.Trans.State.Strict (runStateT)
 import qualified Data.Attoparsec.ByteString       as AB
 import qualified Data.Attoparsec.ByteString.Char8 as A
-import           Data.Bits                        (shiftR, (.&.))
+import           Data.Bits                        (shiftL, shiftR, (.&.), (.|.))
 import qualified Data.ByteString                  as BB
 import qualified Data.ByteString.Char8            as B
-import           Data.Vector                      (fromList)
+import           Data.Vector                      (fromList, toList)
+import           Data.Word                        (Word8)
 import           Pipes                            (Consumer, Producer, (>->))
 import           Pipes.Attoparsec                 (ParsingError (..), parse)
 import qualified Pipes.ByteString                 as PB
 import qualified Pipes.Prelude                    as P
 import           Pipes.Safe                       (MonadSafe)
-import qualified Pipes.Safe.Prelude
+import qualified Pipes.Safe.Prelude               as PS
 import           System.IO                        (Handle, IOMode (..),
-                                                   withFile)
+                                                   hPutStrLn, withFile)
 
 
 bimParser :: A.Parser EigenstratSnpEntry
@@ -98,7 +100,7 @@ readPlinkBedProd nrInds prod = do
 
 -- |A function to read a bed file from a file. Returns a Producer over all lines.
 readPlinkBedFile :: (MonadSafe m) => FilePath -> Int -> m (Producer GenoLine m ())
-readPlinkBedFile file nrInds = readPlinkBedProd nrInds (Pipes.Safe.Prelude.withFile file ReadMode PB.fromHandle)
+readPlinkBedFile file nrInds = readPlinkBedProd nrInds (PS.withFile file ReadMode PB.fromHandle)
 
 -- |Function to read a Bim File from StdIn. Returns a Pipes-Producer over the EigenstratSnpEntries.
 readBimStdIn :: (MonadThrow m, MonadIO m) => Producer EigenstratSnpEntry m ()
@@ -132,5 +134,58 @@ writeBim :: (MonadIO m) => Handle -- ^The Eigenstrat Snp File handle.
 writeBim snpFileH =
     let snpOutTextConsumer = PB.toHandle snpFileH
         toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt) ->
-            B.intercalate "\t" [unChrom chrom, gid, B.pack (show gpos), B.pack (show pos), B.singleton ref, B.singleton alt])
+            let bimLine = B.intercalate "\t" [unChrom chrom, gid, B.pack (show gpos),
+                    B.pack (show pos), B.singleton ref, B.singleton alt]
+            in  bimLine <> "\n")
     in  toTextPipe >-> snpOutTextConsumer
+
+-- |Function to write a Plink Fam file.
+writeFam :: (MonadIO m) => FilePath -> [EigenstratIndEntry] -> m ()
+writeFam f indEntries =
+    liftIO . withFile f WriteMode $ \h ->
+        forM_ indEntries $ \(EigenstratIndEntry name sex popName) ->
+            hPutStrLn h $ popName <> "\t" <> name <> "\t0\t0\t" <> sexToStr sex <> "\t0"
+  where
+    sexToStr sex = case sex of
+        Male    -> "1"
+        Female  -> "2"
+        Unknown -> "0"
+
+-- |Function to write an Eigentrat Geno File. Returns a consumer expecting Eigenstrat Genolines.
+writeBed :: (MonadIO m) => Handle -- ^The Bed file handle
+                -> Consumer GenoLine m () -- ^A consumer to read Genotype entries.
+writeBed bedFileH = do
+    liftIO $ BB.hPut bedFileH (BB.pack [0b01101100, 0b00011011, 0b00000001])
+    let bedOutConsumer = PB.toHandle bedFileH
+        toPlinkPipe = P.map (BB.pack . genoLineToBytes)
+    toPlinkPipe >-> bedOutConsumer
+  where
+    genoLineToBytes :: GenoLine -> [Word8]
+    genoLineToBytes genoLine = go (toList genoLine)
+      where
+        go :: [GenoEntry] -> [Word8]
+        go (g1 : g2 : g3 : g4 : rest) = constructByte [g1, g2, g3, g4] : go rest
+        -- go (g1 : g2 : g3 : g4 : rest) = constructByte [g4, g3, g2, g1] : go rest
+        go genoEntries = [constructByte genoEntries]
+        constructByte :: [GenoEntry] -> Word8
+        constructByte [] = error "constructByte - should never happen"
+        constructByte [g] = genoEntryToByte g
+        constructByte (g:gs) = shiftL (constructByte gs) 2 .|. genoEntryToByte g
+
+genoEntryToByte :: GenoEntry -> Word8
+genoEntryToByte HomRef  = 0b00000000
+genoEntryToByte HomAlt  = 0b00000011
+genoEntryToByte Het     = 0b00000010
+genoEntryToByte Missing = 0b00000001
+
+-- |Function to write a Plink Database. Returns a consumer expecting joint Snp- and Genotype lines.
+writePlink :: (MonadSafe m) => FilePath -- ^The Bed file
+                -> FilePath -- ^The Bim File
+                -> FilePath -- ^The Fam file
+                -> [EigenstratIndEntry] -- ^The list of individual entries
+                -> Consumer (EigenstratSnpEntry, GenoLine) m () -- ^A consumer to read joint Snp/Genotype entries.
+writePlink bedFile bimFile famFile indEntries = do
+    liftIO $ writeFam famFile indEntries
+    let bimOutConsumer = PS.withFile bimFile WriteMode writeBim
+        bedOutConsumer = PS.withFile bedFile WriteMode writeBed
+    P.tee (P.map fst >-> bimOutConsumer) >-> P.map snd >-> bedOutConsumer

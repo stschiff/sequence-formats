@@ -2,12 +2,17 @@
 module SequenceFormats.PlinkSpec (spec) where
 
 import           SequenceFormats.Eigenstrat (EigenstratIndEntry (..),
-                                             EigenstratSnpEntry (..), Sex (..), GenoLine, GenoEntry(..))
-import           SequenceFormats.Plink      (readBimFile, readFamFile, readPlinkBedFile)
+                                             EigenstratSnpEntry (..),
+                                             GenoEntry (..), GenoLine, Sex (..))
+import           SequenceFormats.Plink      (readBimFile, readFamFile,
+                                             readPlink, readPlinkBedFile,
+                                             writePlink)
 import           SequenceFormats.Utils      (Chrom (..))
 
 import           Control.Foldl              (list, purely)
+import           Control.Monad.IO.Class     (liftIO)
 import           Data.Vector                (fromList)
+import           Pipes                      (each, runEffect, (>->))
 import qualified Pipes.Prelude              as P
 import           Pipes.Safe                 (runSafeT)
 import           Test.Hspec
@@ -17,6 +22,8 @@ spec = do
     testReadBimFile
     testReadFamFile
     testReadBedFile
+    testReadPlink
+    testWritePlink
 
 mockDatEigenstratSnp :: [EigenstratSnpEntry]
 mockDatEigenstratSnp = [
@@ -65,3 +72,32 @@ testReadBedFile = describe "readBedFile" $
             bedProd <- readPlinkBedFile fn 5
             purely P.fold list bedProd
         bedDat `shouldBe` mockDatPlinkBed
+
+testReadPlink :: Spec
+testReadPlink = describe "readPlink" $ do
+    it "should read the correct Plink files" $ do
+        let bimFile = "testDat/example.plink.bim"
+            famFile = "testDat/example.plink.fam"
+            bedFile = "testDat/example.plink.bed"
+        (indEntries, esProd) <- runSafeT $ readPlink bedFile bimFile famFile
+        indEntries `shouldBe` mockDatEigenstratInd
+        snpGenoEntries <- runSafeT $ purely P.fold list esProd
+        (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp
+        (map snd snpGenoEntries) `shouldBe` mockDatPlinkBed
+
+testWritePlink :: Spec
+testWritePlink = describe "writePlink" $ do
+    it "should write and read back Plink data correctly" $ do
+        let tmpGeno = "/tmp/plinkWriteTest.bed"
+            tmpSnp = "/tmp/plinkWriteTest.bim"
+            tmpInd = "/tmp/plinkWriteTest.fam"
+            testDatSnpProd = each mockDatEigenstratSnp
+            testDatGenoProd = each mockDatPlinkBed
+            testDatJointProd = P.zip testDatSnpProd testDatGenoProd
+        liftIO . runSafeT . runEffect $
+            testDatJointProd >-> writePlink tmpGeno tmpSnp tmpInd mockDatEigenstratInd
+        (indEntries, esProd) <- liftIO . runSafeT $ readPlink tmpGeno tmpSnp tmpInd
+        indEntries `shouldBe` mockDatEigenstratInd
+        snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
+        (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp
+        (map snd snpGenoEntries) `shouldBe` mockDatPlinkBed

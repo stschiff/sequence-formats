@@ -72,3 +72,4 @@ testWriteEigenstrat = describe "writeEigenstrat" $ do
         indEntries `shouldBe` mockDatEigenstratInd 
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
         (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp
+        (map snd snpGenoEntries) `shouldBe` mockDatEigenstratGeno

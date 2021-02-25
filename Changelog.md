@@ -1,3 +1,5 @@
+V 1.6.0: Plink Output now supported.
+
 V 1.5.1.4: Plink BIM parsing now automatically converts from Numbers (0,1,2,3,4) to Letters (N,A,C,T,G).
 
 V 1.5.1.3: added possibility to parse allele names 01234 in bim files.
