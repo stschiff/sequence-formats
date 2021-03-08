@@ -164,9 +164,9 @@ writeBed bedFileH = do
     genoLineToBytes genoLine = go (toList genoLine)
       where
         go :: [GenoEntry] -> [Word8]
-        go (g1 : g2 : g3 : g4 : rest) = constructByte [g1, g2, g3, g4] : go rest
-        -- go (g1 : g2 : g3 : g4 : rest) = constructByte [g4, g3, g2, g1] : go rest
-        go genoEntries = [constructByte genoEntries]
+        go [] = [] -- empty list for recursion stop
+        go (g1 : g2 : g3 : g4 : rest) = constructByte [g1, g2, g3, g4] : go rest -- at least 5 entries -> more than 1 byte
+        go genoEntries = [constructByte genoEntries] -- four or less entries -> 1 byte
         constructByte :: [GenoEntry] -> Word8
         constructByte [] = error "constructByte - should never happen"
         constructByte [g] = genoEntryToByte g
