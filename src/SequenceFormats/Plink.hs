@@ -100,7 +100,7 @@ readPlinkBedProd nrInds prod = do
 
 -- |A function to read a bed file from a file. Returns a Producer over all lines.
 readPlinkBedFile :: (MonadSafe m) => FilePath -> Int -> m (Producer GenoLine m ())
-readPlinkBedFile file nrInds = readPlinkBedProd nrInds (PS.withFile file ReadMode PB.fromHandle)
+readPlinkBedFile file nrInds = readPlinkBedProd nrInds (PS.withFile file ReadMode (\h -> PB.fromHandle h))
 
 -- |Function to read a Bim File from StdIn. Returns a Pipes-Producer over the EigenstratSnpEntries.
 readBimStdIn :: (MonadThrow m, MonadIO m) => Producer EigenstratSnpEntry m ()

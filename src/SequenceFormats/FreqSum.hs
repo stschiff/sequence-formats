@@ -73,7 +73,7 @@ readFreqSumStdIn = readFreqSumProd PB.stdin
 
 -- |A function to read a freqsum file from a file. Returns a pair of a freqSum Header and a Producer over all lines.
 readFreqSumFile :: (MonadSafe m) => FilePath -> m (FreqSumHeader, Producer FreqSumEntry m ())
-readFreqSumFile file = readFreqSumProd $ withFile file ReadMode PB.fromHandle
+readFreqSumFile file = readFreqSumProd $ withFile file ReadMode (\h -> PB.fromHandle h)
 
 parseFreqSumHeader :: A.Parser FreqSumHeader
 parseFreqSumHeader = do
