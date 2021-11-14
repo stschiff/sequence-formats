@@ -93,7 +93,7 @@ readHistogram path = liftIO $ withFile path ReadMode readHistogramFromHandle
 -- |Read a histogram from a File Handle.
 readHistogramFromHandle :: (MonadIO m) => Handle -> m RareAlleleHistogram
 readHistogramFromHandle handle = do
-    res <- evalStateT (parse parseHistogram) . (\h -> PB.fromHandle h) $ handle
+    res <- evalStateT (parse parseHistogram) (PB.fromHandle handle)
     case res of
         Nothing -> throw (SeqFormatException "histogram file exhausted too early")
         Just (Left err) -> throw (SeqFormatException ("Histogram parsing error: " <> show err))
