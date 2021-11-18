@@ -7,7 +7,7 @@
 module SequenceFormats.FreqSum (readFreqSumStdIn, readFreqSumFile, FreqSumEntry(..),  
     FreqSumHeader(..), printFreqSumStdOut, printFreqSumFile, freqSumEntryToText) where
 
-import SequenceFormats.Utils (consumeProducer, Chrom(..))
+import SequenceFormats.Utils (consumeProducer, Chrom(..), readFileProd)
 
 import Control.Applicative ((<|>))
 import Control.Monad.Catch (MonadThrow, throwM)
@@ -73,7 +73,7 @@ readFreqSumStdIn = readFreqSumProd PB.stdin
 
 -- |A function to read a freqsum file from a file. Returns a pair of a freqSum Header and a Producer over all lines.
 readFreqSumFile :: (MonadSafe m) => FilePath -> m (FreqSumHeader, Producer FreqSumEntry m ())
-readFreqSumFile file = readFreqSumProd $ withFile file ReadMode PB.fromHandle
+readFreqSumFile = readFreqSumProd . readFileProd
 
 parseFreqSumHeader :: A.Parser FreqSumHeader
 parseFreqSumHeader = do
