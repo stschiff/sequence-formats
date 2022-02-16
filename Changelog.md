@@ -1,3 +1,4 @@
+V 1.6.3: Pileup reference-base is read as upper case, even if it's not in the file.
 V 1.6.2: Made compatible with GHC 9 (thanks to github user sjakobi)
 
 V 1.6.0: Plink Output now supported.
