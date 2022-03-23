@@ -1,3 +1,4 @@
+V 1.6.4: Fixed a bug in Fasta parsing which would skip the first line if the header was minimal.
 V 1.6.3: Pileup reference-base is read as upper case, even if it's not in the file.
 V 1.6.2: Made compatible with GHC 9 (thanks to github user sjakobi)
 

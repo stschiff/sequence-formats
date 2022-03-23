@@ -60,7 +60,6 @@ fastaHeaderLineParser :: A.Parser Chrom
 fastaHeaderLineParser = do
     _ <- A.char '>'
     chrom <- A.takeWhile isAlphaNum
-    A.skipSpace
     A.skipWhile (\c -> c /= '\n' && c /= '\r')
     A.endOfLine
     return . Chrom $ chrom
