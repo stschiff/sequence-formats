@@ -5,24 +5,26 @@
 -}
 module SequenceFormats.Fasta (readNextFastaEntry, loadFastaChrom) where
 
-import SequenceFormats.Utils (Chrom(..))
+import           SequenceFormats.Utils            (Chrom (..))
 
-import Control.Exception.Base (throwIO, AssertionFailed(..))
-import Control.Monad (void)
-import Control.Monad.IO.Class (liftIO, MonadIO)
-import Control.Monad.Trans.State.Strict (runStateT)
+import           Control.Exception.Base           (AssertionFailed (..),
+                                                   throwIO)
+import           Control.Monad                    (void)
+import           Control.Monad.IO.Class           (MonadIO, liftIO)
+import           Control.Monad.Trans.State.Strict (runStateT)
 import qualified Data.Attoparsec.ByteString.Char8 as A
-import qualified Data.ByteString.Char8 as B
-import Data.Char (isAlphaNum)
-import Lens.Family2 (view)
-import Pipes (Producer, next, (>->), runEffect)
-import Pipes.Attoparsec (parse)
-import qualified Pipes.ByteString as P
-import Pipes.Prelude (drain)
-import System.IO (Handle, hPutStr, stderr)
+import qualified Data.ByteString.Char8            as B
+import           Data.Char                        (isSpace)
+import           Lens.Family2                     (view)
+import           Pipes                            (Producer, next, runEffect,
+                                                   (>->))
+import           Pipes.Attoparsec                 (parse)
+import qualified Pipes.ByteString                 as P
+import           Pipes.Prelude                    (drain)
+import           System.IO                        (Handle, hPutStr, stderr)
 
--- |A function to select out a specific chromosome from a Fasta File. Expects a file handle to the 
--- file and a chromosome. Note that by Chromosome I simply denote a fasta header line, as is the 
+-- |A function to select out a specific chromosome from a Fasta File. Expects a file handle to the
+-- file and a chromosome. Note that by Chromosome I simply denote a fasta header line, as is the
 -- case for example for the human reference genome. Returns a Bytestring-Producer over the single sequence followed the specified header (the chromosome).
 loadFastaChrom :: Handle -> Chrom -> IO (Producer B.ByteString IO ())
 loadFastaChrom refFileHandle chrom = do
@@ -59,7 +61,7 @@ readNextFastaEntry prod = do
 fastaHeaderLineParser :: A.Parser Chrom
 fastaHeaderLineParser = do
     _ <- A.char '>'
-    chrom <- A.takeWhile isAlphaNum
+    chrom <- A.takeWhile $ not . isSpace
     A.skipWhile (\c -> c /= '\n' && c /= '\r')
     A.endOfLine
     return . Chrom $ chrom
