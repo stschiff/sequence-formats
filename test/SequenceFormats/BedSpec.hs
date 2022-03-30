@@ -6,7 +6,7 @@ import Pipes (each)
 import qualified Pipes.Prelude as P
 import Pipes.Safe (runSafeT)
 import SequenceFormats.Bed (BedEntry(..), readBedFile)
-import SequenceFormats.Genomic (filterThroughBed)
+import SequenceFormats.Genomic (genomicFilterThroughBed)
 import SequenceFormats.Eigenstrat (EigenstratSnpEntry(EigenstratSnpEntry))
 import SequenceFormats.Utils (Chrom(..))
 import Test.Hspec
@@ -49,5 +49,5 @@ testFilterThroughBed = describe "filterThroughBed" $ do
     it "should filter correctly" $ do
         let bedProd = readBedFile "testDat/example.bed"
         let eigenstratProd = each mockDatEigenstratSnp
-        filtered <- runSafeT $ purely P.fold list (filterThroughBed bedProd eigenstratProd)
+        filtered <- runSafeT $ purely P.fold list (genomicFilterThroughBed bedProd eigenstratProd)
         filtered `shouldBe` mockFiltered

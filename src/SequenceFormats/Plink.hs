@@ -13,7 +13,6 @@ import           Control.Applicative              ((<|>))
 import           Control.Monad                    (forM_, void)
 import           Control.Monad.Catch              (MonadThrow, throwM)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
-import           Control.Monad.Trans.Class        (lift)
 import           Control.Monad.Trans.State.Strict (runStateT)
 import qualified Data.Attoparsec.ByteString       as AB
 import qualified Data.Attoparsec.ByteString.Char8 as A
@@ -57,8 +56,8 @@ famParser = do
     A.skipMany A.space
     pop <- word
     ind <- A.skipMany1 A.space >> word
-    _   <- A.skipMany1 A.space >> A.decimal
-    _   <- A.skipMany1 A.space >> A.decimal
+    _   <- A.skipMany1 A.space >> A.decimal :: A.Parser Int
+    _   <- A.skipMany1 A.space >> A.decimal :: A.Parser Int
     sex <- A.skipMany1 A.space >> parseSex
     _   <- A.skipMany1 A.space >> word
     void A.endOfLine
