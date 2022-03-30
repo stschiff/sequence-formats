@@ -1,3 +1,4 @@
+V 1.6.6.0: Added a minimal Bed parser and a bed-filter
 V 1.6.5.0: Long chromosome names are now parsed correctly
 V 1.6.4: Fixed a bug in Fasta parsing which would skip the first line if the header was minimal.
 V 1.6.3: Pileup reference-base is read as upper case, even if it's not in the file.
