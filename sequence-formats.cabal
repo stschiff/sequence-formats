@@ -15,6 +15,7 @@ Bug-Reports:         https://github.com/stschiff/sequence-formats/issues
 extra-source-files:  README.md,
                      Changelog.md,
                      testDat/example.bim,
+                     testDat/example.bed
                      testDat/example.eigenstratgeno,
                      testDat/example.fasta,
                      testDat/example.freqsum,
@@ -36,7 +37,9 @@ library
                        SequenceFormats.Eigenstrat,
                        SequenceFormats.Plink,
                        SequenceFormats.Utils,
-                       SequenceFormats.Pileup
+                       SequenceFormats.Pileup,
+                       SequenceFormats.Bed,
+                       SequenceFormats.Genomic
   hs-source-dirs:      src
   build-depends:       base >= 4.7 && < 5, containers, errors, attoparsec, pipes,
                        transformers, bytestring, lens-family,
@@ -51,6 +54,7 @@ Test-Suite sequenceFormatTests
   build-depends:       base, sequence-formats, foldl, pipes, pipes-safe, tasty, vector,
                        transformers, tasty-hunit, bytestring, containers, hspec
   other-modules:       SequenceFormats.EigenstratSpec,
+                       SequenceFormats.BedSpec,
                        SequenceFormats.FastaSpec,
                        SequenceFormats.FreqSumSpec,
                        SequenceFormats.RareAlleleHistogramSpec,

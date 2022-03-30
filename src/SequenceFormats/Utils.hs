@@ -73,7 +73,7 @@ consumeProducer :: (MonadThrow m) => A.Parser a -> Producer B.ByteString m () ->
 consumeProducer parser prod = parsed parser prod >>= liftParsingErrors
 
 readFileProd :: (PS.MonadSafe m) => FilePath -> Producer B.ByteString m ()
-readFileProd f = PS.withFile f ReadMode (\h -> PB.fromHandle h)
+readFileProd f = PS.withFile f ReadMode PB.fromHandle
 
 word :: A.Parser B.ByteString
 word = A.takeTill isSpace
