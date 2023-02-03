@@ -68,9 +68,9 @@ processPileupEntry refA cov readBaseString =
         | x == ',' = (refA, ReverseStrand) : go xs
         | x `elem` ("ACTGN" :: String) = (x, ForwardStrand) : go xs
         | x `elem` ("actgn" :: String) = (toUpper x, ReverseStrand) : go xs
-        | x `elem` ("$*" :: String) = go xs
-        | x == '^' = go (drop 1 xs)
-        | (x == '+' || x == '-') =
+        | x `elem` ("$*#<>" :: String) = go xs
+        | x == '^' = go (drop 1 xs) -- skip the next character, which is the mapping quality 
+        | x == '+' || x == '-' =  -- insertions or deletions, followed by a decimal number
             let [(num, rest)] = reads xs in go (drop num rest)
         | otherwise = error $ "cannot parse read base string: " ++ (x:xs)
     go [] = []
