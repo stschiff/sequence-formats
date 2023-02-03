@@ -51,7 +51,7 @@ data PlinkFamEntry = PlinkFamEntry {
     _famPhenotype    :: String
 } deriving (Eq, Show)
 
-data PlinkPopNameMode = PlinkPopNameAsFamily | PlinkPopNameAsPhenotype | PlinkPopNameAsBoth
+data PlinkPopNameMode = PlinkPopNameAsFamily | PlinkPopNameAsPhenotype | PlinkPopNameAsBoth deriving (Eq, Show)
 
 bimParser :: A.Parser EigenstratSnpEntry
 bimParser = do
