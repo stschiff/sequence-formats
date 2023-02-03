@@ -6,7 +6,9 @@ import           SequenceFormats.Eigenstrat (EigenstratIndEntry (..),
                                              GenoEntry (..), GenoLine, Sex (..))
 import           SequenceFormats.Plink      (readBimFile, readFamFile,
                                              readPlink, readPlinkBedFile,
-                                             writePlink)
+                                             writePlink, PlinkFamEntry(..),
+                                             plinkFam2EigenstratInd, eigenstratInd2PlinkFam,
+                                             PlinkPopNameMode(..))
 import           SequenceFormats.Utils      (Chrom (..))
 
 import           Control.Foldl              (list, purely)
@@ -24,6 +26,8 @@ spec = do
     testReadBedFile
     testReadPlink
     testWritePlink
+    testFam2Ind
+    testInd2Fam
 
 mockDatEigenstratSnp :: [EigenstratSnpEntry]
 mockDatEigenstratSnp = [
@@ -35,13 +39,13 @@ mockDatEigenstratSnp = [
     EigenstratSnpEntry (Chrom "11") 500000 0.005000 "rs5555" 'T' 'A',
     EigenstratSnpEntry (Chrom "11") 600000 0.006000 "rs6666" 'G' 'T']
 
-mockDatEigenstratInd :: [EigenstratIndEntry]
-mockDatEigenstratInd = [
-    EigenstratIndEntry "SAMPLE0" Female "1",
-    EigenstratIndEntry "SAMPLE1" Male "2",
-    EigenstratIndEntry "SAMPLE2" Female "3",
-    EigenstratIndEntry "SAMPLE3" Male "4",
-    EigenstratIndEntry "SAMPLE4" Female "5"]
+mockDatPlinkFam :: [PlinkFamEntry]
+mockDatPlinkFam = [
+    PlinkFamEntry "Family1" "SAMPLE0" "0" "0" Female "Pop1",
+    PlinkFamEntry "Family2" "SAMPLE1" "0" "0" Male "Pop2",
+    PlinkFamEntry "Family3" "SAMPLE2" "0" "0" Female "Pop3",
+    PlinkFamEntry "Family4" "SAMPLE3" "0" "0" Male "Pop4",
+    PlinkFamEntry "Family5" "SAMPLE4" "0" "0" Female "Pop5"]
 
 mockDatPlinkBed :: [GenoLine]
 mockDatPlinkBed = [
@@ -62,7 +66,7 @@ testReadBimFile = describe "readBimFile" $
 testReadFamFile :: Spec
 testReadFamFile = describe "readFamFile" $
     it "should read a FAM file correctly" $ do
-        readFamFile "testDat/example.fam" `shouldReturn` mockDatEigenstratInd
+        readFamFile "testDat/example.fam" `shouldReturn` mockDatPlinkFam
 
 testReadBedFile :: Spec
 testReadBedFile = describe "readBedFile" $
@@ -77,10 +81,10 @@ testReadPlink :: Spec
 testReadPlink = describe "readPlink" $ do
     it "should read the correct Plink files" $ do
         let bimFile = "testDat/example.plink.bim"
-            famFile = "testDat/example.plink.fam"
+            famFile = "testDat/example.fam"
             bedFile = "testDat/example.plink.bed"
         (indEntries, esProd) <- runSafeT $ readPlink bedFile bimFile famFile
-        indEntries `shouldBe` mockDatEigenstratInd
+        indEntries `shouldBe` mockDatPlinkFam
         snpGenoEntries <- runSafeT $ purely P.fold list esProd
         (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp
         (map snd snpGenoEntries) `shouldBe` mockDatPlinkBed
@@ -95,9 +99,39 @@ testWritePlink = describe "writePlink" $ do
             testDatGenoProd = each mockDatPlinkBed
             testDatJointProd = P.zip testDatSnpProd testDatGenoProd
         liftIO . runSafeT . runEffect $
-            testDatJointProd >-> writePlink tmpGeno tmpSnp tmpInd mockDatEigenstratInd
+            testDatJointProd >-> writePlink tmpGeno tmpSnp tmpInd mockDatPlinkFam
         (indEntries, esProd) <- liftIO . runSafeT $ readPlink tmpGeno tmpSnp tmpInd
-        indEntries `shouldBe` mockDatEigenstratInd
+        indEntries `shouldBe` mockDatPlinkFam
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
         (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp
         (map snd snpGenoEntries) `shouldBe` mockDatPlinkBed
+
+testFam2Ind :: Spec
+testFam2Ind = describe "plinkFam2EigenstratInd" $ do
+    it "should correctly convert with family-option" $ do
+        let fam = PlinkFamEntry "Family1" "SAMPLE0" "0" "0" Female "Pop1"
+        plinkFam2EigenstratInd PlinkPopNameAsFamily fam `shouldBe` EigenstratIndEntry "SAMPLE0" Female "Family1"
+    it "should correctly convert with phenotype-option" $ do
+        let fam = PlinkFamEntry "Family1" "SAMPLE0" "0" "0" Female "Pop1"
+        plinkFam2EigenstratInd PlinkPopNameAsPhenotype fam `shouldBe` EigenstratIndEntry "SAMPLE0" Female "Pop1"
+    it "should correctly convert with both-option when they differ" $ do
+        let fam = PlinkFamEntry "Family1" "SAMPLE0" "0" "0" Female "Pop1"
+        plinkFam2EigenstratInd PlinkPopNameAsBoth fam `shouldBe` EigenstratIndEntry "SAMPLE0" Female "Family1:Pop1"
+    it "should correctly convert with both-option when they are the same" $ do
+        let fam = PlinkFamEntry "Pop1" "SAMPLE0" "0" "0" Female "Pop1"
+        plinkFam2EigenstratInd PlinkPopNameAsBoth fam `shouldBe` EigenstratIndEntry "SAMPLE0" Female "Pop1"
+    
+testInd2Fam :: Spec
+testInd2Fam = describe "eigenstratInd2PlinkFam" $ do
+    it "should correctly convert with family-option" $ do
+        let es = EigenstratIndEntry "SAMPLE0" Female "Pop1"
+            fam = PlinkFamEntry "Pop1" "SAMPLE0" "0" "0" Female "0"
+        eigenstratInd2PlinkFam PlinkPopNameAsFamily es `shouldBe` fam
+    it "should correctly convert with phenotype-option" $ do
+        let es = EigenstratIndEntry "SAMPLE0" Female "Pop1"
+            fam = PlinkFamEntry "DummyFamily" "SAMPLE0" "0" "0" Female "Pop1"
+        eigenstratInd2PlinkFam PlinkPopNameAsPhenotype es `shouldBe` fam
+    it "should correctly convert with both-option" $ do
+        let es = EigenstratIndEntry "SAMPLE0" Female "Pop1"
+            fam = PlinkFamEntry "Pop1" "SAMPLE0" "0" "0" Female "Pop1"
+        eigenstratInd2PlinkFam PlinkPopNameAsBoth es `shouldBe` fam

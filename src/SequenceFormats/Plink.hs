@@ -1,6 +1,16 @@
 {-# LANGUAGE BinaryLiterals    #-}
 {-# LANGUAGE OverloadedStrings #-}
-module SequenceFormats.Plink (readBimStdIn, readBimFile, writeBim, readFamFile, readPlinkBedFile, readPlink, writePlink) where
+module SequenceFormats.Plink (readBimStdIn,
+                              readBimFile,
+                              writeBim,
+                              readFamFile,
+                              readPlinkBedFile,
+                              readPlink,
+                              writePlink,
+                              PlinkFamEntry(..),
+                              plinkFam2EigenstratInd,
+                              eigenstratInd2PlinkFam,
+                              PlinkPopNameMode(..)) where
 
 import           SequenceFormats.Eigenstrat       (EigenstratIndEntry (..),
                                                    EigenstratSnpEntry (..),
@@ -19,6 +29,7 @@ import qualified Data.Attoparsec.ByteString.Char8 as A
 import           Data.Bits                        (shiftL, shiftR, (.&.), (.|.))
 import qualified Data.ByteString                  as BB
 import qualified Data.ByteString.Char8            as B
+import           Data.List                        (intercalate)
 import           Data.Vector                      (fromList, toList)
 import           Data.Word                        (Word8)
 import           Pipes                            (Consumer, Producer, (>->))
@@ -30,6 +41,17 @@ import qualified Pipes.Safe.Prelude               as PS
 import           System.IO                        (Handle, IOMode (..),
                                                    hPutStrLn, withFile)
 
+-- see https://www.cog-genomics.org/plink/2.0/formats#fam
+data PlinkFamEntry = PlinkFamEntry {
+    _famFamilyID     :: String,
+    _famIndividualID :: String,
+    _famFatherID     :: String,
+    _famMotherID     :: String,
+    _famSexCode      :: Sex,
+    _famPhenotype    :: String
+} deriving (Eq, Show)
+
+data PlinkPopNameMode = PlinkPopNameAsFamily | PlinkPopNameAsPhenotype | PlinkPopNameAsBoth
 
 bimParser :: A.Parser EigenstratSnpEntry
 bimParser = do
@@ -51,22 +73,38 @@ bimParser = do
     convertNum '4' = 'T'
     convertNum x   = x
 
-famParser :: A.Parser EigenstratIndEntry
+famParser :: A.Parser PlinkFamEntry
 famParser = do
     A.skipMany A.space
-    pop <- word
-    ind <- A.skipMany1 A.space >> word
-    _   <- A.skipMany1 A.space >> A.decimal :: A.Parser Int
-    _   <- A.skipMany1 A.space >> A.decimal :: A.Parser Int
-    sex <- A.skipMany1 A.space >> parseSex
-    _   <- A.skipMany1 A.space >> word
+    famID    <- B.unpack <$> word
+    indID    <- B.unpack <$> (A.skipMany1 A.space >> word)
+    fatherID <- B.unpack <$> (A.skipMany1 A.space >> word)
+    motherID <- B.unpack <$> (A.skipMany1 A.space >> word)
+    sex      <- A.skipMany1 A.space >> parseSex
+    phen     <- B.unpack <$> (A.skipMany1 A.space >> word)
     void A.endOfLine
-    return $ EigenstratIndEntry (B.unpack ind) sex (B.unpack pop)
+    return $ PlinkFamEntry famID indID fatherID motherID sex phen
   where
     parseSex = parseMale <|> parseFemale <|> parseUnknown
     parseMale = A.char '1' >> return Male
     parseFemale = A.char '2' >> return Female
     parseUnknown = A.anyChar >> return Unknown
+
+plinkFam2EigenstratInd :: PlinkPopNameMode -> PlinkFamEntry -> EigenstratIndEntry
+plinkFam2EigenstratInd plinkPopNameMode (PlinkFamEntry famId indId _ _ sex phen) =
+    let popName = case plinkPopNameMode of
+            PlinkPopNameAsFamily    -> famId
+            PlinkPopNameAsPhenotype -> phen
+            -- If the two differ but you want both, then merge them somehow.
+            PlinkPopNameAsBoth -> if famId == phen then famId else famId ++ ":" ++ phen
+    in  EigenstratIndEntry indId sex popName
+
+eigenstratInd2PlinkFam :: PlinkPopNameMode -> EigenstratIndEntry -> PlinkFamEntry
+eigenstratInd2PlinkFam plinkPopNameMode (EigenstratIndEntry indId sex popName)=
+    case plinkPopNameMode of
+        PlinkPopNameAsFamily    -> PlinkFamEntry popName indId "0" "0" sex "0"
+        PlinkPopNameAsPhenotype -> PlinkFamEntry "DummyFamily" indId "0" "0" sex popName
+        PlinkPopNameAsBoth      -> PlinkFamEntry popName indId "0" "0" sex popName
 
 bedHeaderParser :: AB.Parser ()
 bedHeaderParser = do
@@ -110,7 +148,7 @@ readBimFile :: (MonadSafe m) => FilePath -> Producer EigenstratSnpEntry m ()
 readBimFile = consumeProducer bimParser . readFileProd
 
 -- |Function to read a Plink fam file. Returns the Eigenstrat Individual Entries as list.
-readFamFile :: (MonadIO m) => FilePath -> m [EigenstratIndEntry]
+readFamFile :: (MonadIO m) => FilePath -> m [PlinkFamEntry]
 readFamFile fn =
     liftIO . withFile fn ReadMode $ \handle ->
         P.toListM $ consumeProducer famParser (PB.fromHandle handle)
@@ -119,7 +157,7 @@ readFamFile fn =
 readPlink :: (MonadSafe m) => FilePath -- ^The Bed file
                -> FilePath -- ^The Bim File
                -> FilePath -- ^The Fam file
-               -> m ([EigenstratIndEntry], Producer (EigenstratSnpEntry, GenoLine) m ()) -- The return pair of individual entries and a joint Snp/Geno Producer.
+               -> m ([PlinkFamEntry], Producer (EigenstratSnpEntry, GenoLine) m ()) -- The return pair of individual entries and a joint Snp/Geno Producer.
 readPlink bedFile bimFile famFile = do
     indEntries <- readFamFile famFile
     let nrInds = length indEntries
@@ -139,11 +177,11 @@ writeBim snpFileH =
     in  toTextPipe >-> snpOutTextConsumer
 
 -- |Function to write a Plink Fam file.
-writeFam :: (MonadIO m) => FilePath -> [EigenstratIndEntry] -> m ()
+writeFam :: (MonadIO m) => FilePath -> [PlinkFamEntry] -> m ()
 writeFam f indEntries =
     liftIO . withFile f WriteMode $ \h ->
-        forM_ indEntries $ \(EigenstratIndEntry name sex popName) ->
-            hPutStrLn h $ popName <> "\t" <> name <> "\t0\t0\t" <> sexToStr sex <> "\t0"
+        forM_ indEntries $ \(PlinkFamEntry famId indId fatherId motherId sex phen) ->
+            hPutStrLn h . intercalate "\t" $ [famId, indId, fatherId, motherId, sexToStr sex, phen]
   where
     sexToStr sex = case sex of
         Male    -> "1"
@@ -163,12 +201,12 @@ writeBed bedFileH = do
     genoLineToBytes genoLine = go (toList genoLine)
       where
         go :: [GenoEntry] -> [Word8]
-        go [] = [] -- empty list for recursion stop
+        go []                         = [] -- empty list for recursion stop
         go (g1 : g2 : g3 : g4 : rest) = constructByte [g1, g2, g3, g4] : go rest -- at least 5 entries -> more than 1 byte
-        go genoEntries = [constructByte genoEntries] -- four or less entries -> 1 byte
+        go genoEntries                = [constructByte genoEntries] -- four or less entries -> 1 byte
         constructByte :: [GenoEntry] -> Word8
-        constructByte [] = error "constructByte - should never happen"
-        constructByte [g] = genoEntryToByte g
+        constructByte []     = error "constructByte - should never happen"
+        constructByte [g]    = genoEntryToByte g
         constructByte (g:gs) = shiftL (constructByte gs) 2 .|. genoEntryToByte g
 
 genoEntryToByte :: GenoEntry -> Word8
@@ -181,7 +219,7 @@ genoEntryToByte Missing = 0b00000001
 writePlink :: (MonadSafe m) => FilePath -- ^The Bed file
                 -> FilePath -- ^The Bim File
                 -> FilePath -- ^The Fam file
-                -> [EigenstratIndEntry] -- ^The list of individual entries
+                -> [PlinkFamEntry] -- ^The list of individual entries
                 -> Consumer (EigenstratSnpEntry, GenoLine) m () -- ^A consumer to read joint Snp/Genotype entries.
 writePlink bedFile bimFile famFile indEntries = do
     liftIO $ writeFam famFile indEntries
