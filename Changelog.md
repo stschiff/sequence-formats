@@ -1,7 +1,15 @@
+V 1.6.7.0:
+* Added an option to Plink output, which allows users to store the population mame in either the first or last column, or both
+* Fixed a bug in the pileup-parser which failed at reference-skip symbols (">" and "<").
+
 V 1.6.6.0: Added a minimal Bed parser and a bed-filter
+
 V 1.6.5.0: Long chromosome names are now parsed correctly
+
 V 1.6.4: Fixed a bug in Fasta parsing which would skip the first line if the header was minimal.
+
 V 1.6.3: Pileup reference-base is read as upper case, even if it's not in the file.
+
 V 1.6.2: Made compatible with GHC 9 (thanks to github user sjakobi)
 
 V 1.6.0: Plink Output now supported.
