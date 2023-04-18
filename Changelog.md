@@ -1,5 +1,6 @@
 # Changelog
 
+- V 1.7.1: Made compatible with latest GHC
 - V 1.7.0: Bumped major version for breaking change (correct mistake from 1.6.7.0). Also correct lower pvp-bounds on hackage to be compatible with LTS-18.28.
 - V 1.6.7.0:
     * Added an option to Plink output, which allows users to store the population mame in either the first or last column, or both
