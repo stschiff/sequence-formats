@@ -65,7 +65,7 @@ showHistogram hist = do
             case raJackknifeEstimates hist of
                 Nothing -> [B.intercalate " " [B.pack . showSitePattern $ k, B.pack . show $ v]]
                 Just jkHist -> do
-                    let Just (jkMean, jkSE) = k `Map.lookup` jkHist
+                    let (jkMean, jkSE) = jkHist Map.! k
                     return $ B.intercalate " " [B.pack . showSitePattern $ k, B.pack . show $ v,
                                                 B.pack . show $ jkMean, B.pack . show $ jkSE]
     return $ B.unlines (head0:head1:head2:head3:body)

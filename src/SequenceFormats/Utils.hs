@@ -37,8 +37,8 @@ instance Show Chrom where
 -- |Ord instance for Chrom
 instance Ord Chrom where
     compare (Chrom c1) (Chrom c2) = 
-        let [c1NoChr, c2NoChr] = map removeChr [c1, c2]
-            [c1XYMTconvert, c2XYMTconvert] = map convertXYMT [c1NoChr, c2NoChr]
+        let (c1NoChr, c2NoChr) = (removeChr c1, removeChr c2)
+            (c1XYMTconvert, c2XYMTconvert) = (convertXYMT c1NoChr, convertXYMT c2NoChr)
         in  case (,) <$> readChrom c1XYMTconvert <*> readChrom c2XYMTconvert of
                 Left e -> throw e
                 Right (cn1, cn2) -> cn1 `compare` cn2

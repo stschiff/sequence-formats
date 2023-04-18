@@ -71,6 +71,8 @@ processPileupEntry refA cov readBaseString =
         | x `elem` ("$*#<>" :: String) = go xs
         | x == '^' = go (drop 1 xs) -- skip the next character, which is the mapping quality 
         | x == '+' || x == '-' =  -- insertions or deletions, followed by a decimal number
-            let [(num, rest)] = reads xs in go (drop num rest)
+            case reads xs of
+                [(num, rest)] -> go (drop num rest)
+                _ -> error $ "cannot parse read base string: " ++ (x:xs)
         | otherwise = error $ "cannot parse read base string: " ++ (x:xs)
     go [] = []
