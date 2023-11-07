@@ -36,12 +36,12 @@ testReadVCFfromFile = describe "readVCFfromFile" $ do
         vcfRows !! 6 `shouldBe` vcf7
 
 vcf1 :: VCFentry
-vcf1 = VCFentry (Chrom "1") 10492 (Just "testId") "C" ["T"] 15.0302 Nothing ["DP=28", "PV4=1,1,0.30985,1"]
+vcf1 = VCFentry (Chrom "1") 10492 (Just "testId") "C" ["T"] (Just 15.0302) Nothing ["DP=28", "PV4=1,1,0.30985,1"]
   ["GT", "PL"] [["0/0", "0,3,37"], ["0/0", "0,6,67"], ["0/1", "51,0,28"], ["0/0", "0,54,255"],
   ["0/0", "0,9,83"]]
 
 vcf7 :: VCFentry
-vcf7 = VCFentry (Chrom "2") 30923 Nothing "G" [] 110.112 Nothing ["DP=5", "FQ=-28.9619"]
+vcf7 = VCFentry (Chrom "2") 30923 Nothing "G" [] Nothing Nothing ["DP=5", "FQ=-28.9619"]
   ["GT", "PL"] [["1/1", "0,0,0"], ["1/1", "0,0,0"], ["1/1", "40,6,0"], ["1/1", "105,9,0"], ["1/1", "0,0,0"]]
 
 testGetGenotypes :: Spec

@@ -47,7 +47,7 @@ data VCFentry = VCFentry {
     vcfId :: Maybe B.ByteString, -- ^The SNP ID if non-missing
     vcfRef :: B.ByteString, -- ^ The reference allele (supports also multi-character alleles for Indels)
     vcfAlt :: [B.ByteString], -- ^The alternative alleles, each one possible of multiple characters 
-    vcfQual :: Double, -- ^The quality value
+    vcfQual :: Maybe Double, -- ^The quality value
     vcfFilter :: Maybe B.ByteString, -- ^The Filter value, if non-missing.
     vcfInfo :: [B.ByteString], -- ^A list of Info fields
     vcfFormatString :: [B.ByteString], -- ^A list of format tags
@@ -92,17 +92,18 @@ vcfEntryParser :: A.Parser VCFentry
 vcfEntryParser = vcfEntryParserFull <|> vcfEntryParserTruncated
   where
     vcfEntryParserFull = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
-        sp <*> word <* sp <*> parseAlternativeAlleles <* sp <*> A.double <* sp <*> parseFilter <* 
+        sp <*> word <* sp <*> parseAlternativeAlleles <* sp <*> parseQual <* sp <*> parseFilter <* 
         sp <*> parseInfoFields <* sp <*> parseFormatStrings <* sp <*> parseGenotypeInfos <* 
         A.endOfLine
     vcfEntryParserTruncated = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
-        sp <*> word <* sp <*> parseAlternativeAlleles <* sp <*> A.double <* sp <*> parseFilter <*
+        sp <*> word <* sp <*> parseAlternativeAlleles <* sp <*> parseQual <* sp <*> parseFilter <*
         sp <*> parseInfoFields <*> pure [] <*> pure [] <* A.endOfLine
     sp = A.satisfy (\c -> c == ' ' || c == '\t')
     parseId = (parseDot *> pure Nothing) <|> (Just <$> word)
     parseDot = A.char '.'
     parseAlternativeAlleles = (parseDot *> pure []) <|> (parseAllele `A.sepBy1` A.char ',')
     parseAllele = A.takeTill (\c -> c == ',' || isSpace c)
+    parseQual = (parseDot *> pure Nothing) <|> (Just <$> A.double)
     parseFilter = (parseDot *> pure Nothing) <|> (Just <$> word)
     parseInfoFields = (parseDot *> pure []) <|> (parseInfoField `A.sepBy1` A.char ';')
     parseInfoField = A.takeTill (\c -> c == ';' || isSpace c)
