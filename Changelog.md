@@ -1,5 +1,6 @@
 # Changelog
 
+- V 1.8.0.0: Fixed a bug in the VCF parser that would not accept missing values in QUAL fields (even though the spec explicitly allows for it). This also changed the VCF row structure data type
 - V 1.7.1: Made compatible with latest GHC
 - V 1.7.0: Bumped major version for breaking change (correct mistake from 1.6.7.0). Also correct lower pvp-bounds on hackage to be compatible with LTS-18.28.
 - V 1.6.7.0:
