@@ -41,8 +41,11 @@ pileupParser = do
     _ <- A.space
     pos <- A.decimal
     _ <- A.space
-    refA <- toUpper <$> A.satisfy (A.inClass "ACTGNactgnM")
-     -- for some reason, there is an M in the human reference at
+    refA <- toUpper <$> A.letter_ascii
+     -- we used to parse only ACTGN and M and the small-letter versions of those, 
+     -- but it turns out that there can be more letter from the IUPAC alphabet that can occur in
+     -- fasta reference files, so here we're parsing them all in principle.
+     -- Also, for some reason, there is an M in the human reference at
      -- position 3:60830534 (both in hs37d5 and in hg19)
     _ <- A.space
     baseAndStrandEntries <- parsePileupPerSample refA `A.sepBy1`
