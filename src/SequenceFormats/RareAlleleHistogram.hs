@@ -7,38 +7,39 @@
 module SequenceFormats.RareAlleleHistogram (RareAlleleHistogram(..), readHistogramFromHandle,
                             SitePattern, readHistogram, writeHistogramStdOut, writeHistogramFile, showSitePattern) where
 
-import SequenceFormats.Utils (SeqFormatException(..))
+import           SequenceFormats.Utils            (SeqFormatException (..))
 
-import Control.Applicative (optional)
-import Control.Error (assertErr)
-import Control.Exception (throw)
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.State.Strict (evalStateT)
+import           Control.Applicative              (optional)
+import           Control.Error                    (assertErr)
+import           Control.Exception                (throw)
+import           Control.Monad.IO.Class           (MonadIO, liftIO)
+import           Control.Monad.Trans.State.Strict (evalStateT)
 import qualified Data.Attoparsec.ByteString.Char8 as A
-import Data.Char (isAlphaNum)
-import Data.Int (Int64)
-import Data.List (intercalate, sortBy)
-import qualified Data.Map.Strict as Map
-import qualified Data.ByteString.Char8 as B
-import Pipes.Attoparsec (parse)
-import qualified Pipes.ByteString as PB
-import System.IO (Handle, IOMode(..), withFile)
+import qualified Data.ByteString.Char8            as B
+import           Data.Char                        (isAlphaNum)
+import           Data.Int                         (Int64)
+import           Data.List                        (intercalate, sortBy)
+import qualified Data.Map.Strict                  as Map
+import           Pipes.Attoparsec                 (parse)
+import qualified Pipes.ByteString                 as PB
+import           System.IO                        (Handle, IOMode (..),
+                                                   withFile)
 
 -- |A datatype to represent an Allele Sharing Histogram:
 data RareAlleleHistogram = RareAlleleHistogram {
-    raNames :: [String], -- ^A list of branch names
-    raNVec :: [Int], -- ^A list of haploid sample sizes.
-    raMinAf :: Int, -- ^The minimum allele count
-    raMaxAf :: Int, -- ^The maximum allele count
-    raConditionOn :: [Int], -- ^A list of branch indices that were used to condition the allele 
+    raNames              :: [String], -- ^A list of branch names
+    raNVec               :: [Int], -- ^A list of haploid sample sizes.
+    raMinAf              :: Int, -- ^The minimum allele count
+    raMaxAf              :: Int, -- ^The maximum allele count
+    raConditionOn        :: [Int], -- ^A list of branch indices that were used to condition the allele
                             --sharing pattern
-    raExcludePatterns :: [SitePattern], -- ^A list of patterns that are excluded.
-    raTotalNrSites :: Int64, -- ^The total number of non-missing sites in the genome.
-    raCounts :: Map.Map SitePattern Int64, -- ^The actual data, a dictionary from allele sharing patterns to observed numbers.
+    raExcludePatterns    :: [SitePattern], -- ^A list of patterns that are excluded.
+    raTotalNrSites       :: Int64, -- ^The total number of non-missing sites in the genome.
+    raCounts             :: Map.Map SitePattern Int64, -- ^The actual data, a dictionary from allele sharing patterns to observed numbers.
     raJackknifeEstimates :: Maybe (Map.Map SitePattern (Double, Double)) -- ^An optional dictionary that contains Jackknife estimates and standard deviations for each pattern frequency.
 } deriving (Eq, Show)
 
--- |A simple type synonym for the SitePattern, represented as a list of Integers that represents 
+-- |A simple type synonym for the SitePattern, represented as a list of Integers that represents
 -- each pattern across the branches.
 type SitePattern = [Int]
 
@@ -46,8 +47,8 @@ type SitePattern = [Int]
 showSitePattern :: SitePattern -> String
 showSitePattern = intercalate "," . map show
 
--- |Function to convert a Rare Allele Histogram to text. Returns an error if attempting to print a 
--- histogram with non-standard settings. Many settings, such as minAf>1, are only meant for 
+-- |Function to convert a Rare Allele Histogram to text. Returns an error if attempting to print a
+-- histogram with non-standard settings. Many settings, such as minAf>1, are only meant for
 -- in-memory representations, but are not compatible with the file format itself.
 showHistogram :: RareAlleleHistogram -> Either String B.ByteString
 showHistogram hist = do
@@ -76,16 +77,16 @@ showHistogram hist = do
 writeHistogramStdOut :: (MonadIO m) => RareAlleleHistogram -> m ()
 writeHistogramStdOut hist =
     case showHistogram hist of
-        Left err -> throw (SeqFormatException err)
+        Left err     -> throw (SeqFormatException err)
         Right outStr -> liftIO $ B.putStrLn outStr
 
 -- |Write a histogram to a file
 writeHistogramFile :: (MonadIO m) => FilePath -> RareAlleleHistogram -> m ()
 writeHistogramFile outF hist =
     case showHistogram hist of
-        Left err -> throw (SeqFormatException err)
+        Left err     -> throw (SeqFormatException err)
         Right outStr -> liftIO $ B.writeFile outF outStr
-    
+
 -- |Read a histogram from a FilePath
 readHistogram :: (MonadIO m) => FilePath -> m RareAlleleHistogram
 readHistogram path = liftIO $ withFile path ReadMode readHistogramFromHandle

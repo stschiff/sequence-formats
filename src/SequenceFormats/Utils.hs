@@ -3,23 +3,25 @@
 -- |This module contains helper functions for file parsing.
 
 module SequenceFormats.Utils (liftParsingErrors,
-                              consumeProducer, readFileProd,
+                              consumeProducer, readFileProd, readFileProdCheckCompress,
                               SeqFormatException(..),
                               Chrom(..), word) where
 
-import Control.Error (readErr)
-import Control.Exception (Exception, throw)
-import Control.Monad.Catch (MonadThrow, throwM)
-import Control.Monad.Trans.Class (lift)
+import           Control.Error                    (readErr)
+import           Control.Exception                (Exception, throw)
+import           Control.Monad.Catch              (MonadThrow, throwM)
+import           Control.Monad.Trans.Class        (lift)
 import qualified Data.Attoparsec.ByteString.Char8 as A
-import qualified Data.ByteString.Char8 as B
-import Data.Char (isSpace)
-import Pipes (Producer, next)
-import Pipes.Attoparsec (ParsingError(..), parsed)
-import qualified Pipes.ByteString as PB
-import qualified Pipes.Safe as PS
-import qualified Pipes.Safe.Prelude as PS
-import System.IO (IOMode(..))
+import qualified Data.ByteString.Char8            as B
+import           Data.Char                        (isSpace)
+import           Data.List                        (isSuffixOf)
+import           Pipes                            (Producer, next)
+import           Pipes.Attoparsec                 (ParsingError (..), parsed)
+import qualified Pipes.ByteString                 as PB
+import           Pipes.GZip                       (decompress)
+import qualified Pipes.Safe                       as PS
+import qualified Pipes.Safe.Prelude               as PS
+import           System.IO                        (IOMode (..))
 
 -- |An exception type for parsing BioInformatic file formats.
 data SeqFormatException = SeqFormatException String
@@ -36,11 +38,11 @@ instance Show Chrom where
 
 -- |Ord instance for Chrom
 instance Ord Chrom where
-    compare (Chrom c1) (Chrom c2) = 
+    compare (Chrom c1) (Chrom c2) =
         let (c1NoChr, c2NoChr) = (removeChr c1, removeChr c2)
             (c1XYMTconvert, c2XYMTconvert) = (convertXYMT c1NoChr, convertXYMT c2NoChr)
         in  case (,) <$> readChrom c1XYMTconvert <*> readChrom c2XYMTconvert of
-                Left e -> throw e
+                Left e           -> throw e
                 Right (cn1, cn2) -> cn1 `compare` cn2
       where
         removeChr :: B.ByteString -> B.ByteString
@@ -54,7 +56,7 @@ instance Ord Chrom where
         readChrom :: B.ByteString -> Either SeqFormatException Int
         readChrom c = readErr (SeqFormatException $ "cannot parse chromosome " ++ B.unpack c) . B.unpack $ c
 
--- |A function to help with reporting parsing errors to stderr. Returns a clean Producer over the 
+-- |A function to help with reporting parsing errors to stderr. Returns a clean Producer over the
 -- parsed datatype.
 liftParsingErrors :: (MonadThrow m) =>
     Either (ParsingError, Producer B.ByteString m r) () -> Producer a m ()
@@ -74,6 +76,11 @@ consumeProducer parser prod = parsed parser prod >>= liftParsingErrors
 
 readFileProd :: (PS.MonadSafe m) => FilePath -> Producer B.ByteString m ()
 readFileProd f = PS.withFile f ReadMode (\h -> PB.fromHandle h)
+
+readFileProdCheckCompress :: (PS.MonadSafe m) => FilePath -> Producer B.ByteString m ()
+readFileProdCheckCompress f =
+    let decompressFunc = if ".gz" `isSuffixOf` f then decompress else id
+    in  decompressFunc $ PS.withFile f ReadMode (\h -> PB.fromHandle h)
 
 word :: A.Parser B.ByteString
 word = A.takeTill isSpace

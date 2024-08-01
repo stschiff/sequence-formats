@@ -17,7 +17,8 @@ import           SequenceFormats.Eigenstrat       (EigenstratIndEntry (..),
                                                    GenoEntry (..), GenoLine,
                                                    Sex (..))
 import           SequenceFormats.Utils            (Chrom (..), consumeProducer,
-                                                   readFileProd, word)
+                                                   readFileProdCheckCompress,
+                                                   word)
 
 import           Control.Applicative              ((<|>))
 import           Control.Monad                    (forM_, void)
@@ -137,7 +138,7 @@ readPlinkBedProd nrInds prod = do
 
 -- |A function to read a bed file from a file. Returns a Producer over all lines.
 readPlinkBedFile :: (MonadSafe m) => FilePath -> Int -> m (Producer GenoLine m ())
-readPlinkBedFile file nrInds = readPlinkBedProd nrInds (readFileProd file)
+readPlinkBedFile file nrInds = readPlinkBedProd nrInds . readFileProdCheckCompress $ file
 
 -- |Function to read a Bim File from StdIn. Returns a Pipes-Producer over the EigenstratSnpEntries.
 readBimStdIn :: (MonadThrow m, MonadIO m) => Producer EigenstratSnpEntry m ()
@@ -145,7 +146,7 @@ readBimStdIn = consumeProducer bimParser PB.stdin
 
 -- |Function to read a Bim File from a file. Returns a Pipes-Producer over the EigenstratSnpEntries.
 readBimFile :: (MonadSafe m) => FilePath -> Producer EigenstratSnpEntry m ()
-readBimFile = consumeProducer bimParser . readFileProd
+readBimFile = consumeProducer bimParser . readFileProdCheckCompress
 
 -- |Function to read a Plink fam file. Returns the Eigenstrat Individual Entries as list.
 readFamFile :: (MonadIO m) => FilePath -> m [PlinkFamEntry]

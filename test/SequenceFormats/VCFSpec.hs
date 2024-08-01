@@ -1,18 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 module SequenceFormats.VCFSpec (spec) where
 
-import Control.Foldl (list, purely)
-import Pipes.Prelude (fold)
-import Pipes.Safe (runSafeT)
-import SequenceFormats.FreqSum (FreqSumEntry(..))
-import SequenceFormats.Utils (Chrom(..))
-import SequenceFormats.VCF (readVCFfromFile, getGenotypes, getDosages,
-    isTransversionSnp, vcfToFreqSumEntry, isBiallelicSnp, VCFheader(..), VCFentry(..))
-import Test.Hspec
+import           Control.Foldl           (list, purely)
+import           Pipes.Prelude           (fold)
+import           Pipes.Safe              (runSafeT)
+import           SequenceFormats.FreqSum (FreqSumEntry (..))
+import           SequenceFormats.Utils   (Chrom (..))
+import           SequenceFormats.VCF     (VCFentry (..), VCFheader (..),
+                                          getDosages, getGenotypes,
+                                          isBiallelicSnp, isTransversionSnp,
+                                          readVCFfromFile, vcfToFreqSumEntry)
+import           Test.Hspec
 
 spec :: Spec
 spec = do
     testReadVCFfromFile
+    testReadVCFfromFileCompressed
     testGetGenotypes
     testGetDosages
     testIsTransversionSnp
@@ -30,7 +33,23 @@ testReadVCFfromFile = describe "readVCFfromFile" $ do
         vcfHc !! 0 `shouldBe` "##fileformat=VCFv4.2"
         vcfHc !! 18 `shouldBe` "##bcftools_callCommand=call -c -v"
     it "reads the correct sample names" $
-        vcfSampleNames vcfH `shouldBe` ["12880A", "12881A", "12883A", "12884A", "12885A"] 
+        vcfSampleNames vcfH `shouldBe` ["12880A", "12881A", "12883A", "12884A", "12885A"]
+    it "reads the correct vcf genotype rows" $ do
+        vcfRows !! 0 `shouldBe` vcf1
+        vcfRows !! 6 `shouldBe` vcf7
+
+testReadVCFfromFileCompressed :: Spec
+testReadVCFfromFileCompressed = describe "readVCFfromFile with gzip" $ do
+    (vcfH, vcfRows) <- runIO . runSafeT $ do
+        (vcfH_, vcfProd_) <- readVCFfromFile "testDat/example.vcf.gz"
+        vcfRows_ <- purely fold list vcfProd_
+        return (vcfH_, vcfRows_)
+    let vcfHc = vcfHeaderComments vcfH
+    it "reads the correct header lines" $ do
+        vcfHc !! 0 `shouldBe` "##fileformat=VCFv4.2"
+        vcfHc !! 18 `shouldBe` "##bcftools_callCommand=call -c -v"
+    it "reads the correct sample names" $
+        vcfSampleNames vcfH `shouldBe` ["12880A", "12881A", "12883A", "12884A", "12885A"]
     it "reads the correct vcf genotype rows" $ do
         vcfRows !! 0 `shouldBe` vcf1
         vcfRows !! 6 `shouldBe` vcf7

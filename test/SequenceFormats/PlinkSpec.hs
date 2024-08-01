@@ -4,11 +4,13 @@ module SequenceFormats.PlinkSpec (spec) where
 import           SequenceFormats.Eigenstrat (EigenstratIndEntry (..),
                                              EigenstratSnpEntry (..),
                                              GenoEntry (..), GenoLine, Sex (..))
-import           SequenceFormats.Plink      (readBimFile, readFamFile,
+import           SequenceFormats.Plink      (PlinkFamEntry (..),
+                                             PlinkPopNameMode (..),
+                                             eigenstratInd2PlinkFam,
+                                             plinkFam2EigenstratInd,
+                                             readBimFile, readFamFile,
                                              readPlink, readPlinkBedFile,
-                                             writePlink, PlinkFamEntry(..),
-                                             plinkFam2EigenstratInd, eigenstratInd2PlinkFam,
-                                             PlinkPopNameMode(..))
+                                             writePlink)
 import           SequenceFormats.Utils      (Chrom (..))
 
 import           Control.Foldl              (list, purely)
@@ -22,8 +24,10 @@ import           Test.Hspec
 spec :: Spec
 spec = do
     testReadBimFile
+    testReadBimFileCompressed
     testReadFamFile
     testReadBedFile
+    testReadBedFileCompressed
     testReadPlink
     testWritePlink
     testFam2Ind
@@ -60,7 +64,13 @@ mockDatPlinkBed = [
 testReadBimFile :: Spec
 testReadBimFile = describe "readBimFile" $
     it "should read a BIM file correctly" $ do
-        let esSnpProd = readBimFile "testDat/example.bim"
+        let esSnpProd = readBimFile "testDat/example.plink.bim"
+        (runSafeT $ purely P.fold list esSnpProd) `shouldReturn` mockDatEigenstratSnp
+
+testReadBimFileCompressed :: Spec
+testReadBimFileCompressed = describe "readBimFile with gzip" $
+    it "should read a BIM file correctly" $ do
+        let esSnpProd = readBimFile "testDat/example.plink.bim.gz"
         (runSafeT $ purely P.fold list esSnpProd) `shouldReturn` mockDatEigenstratSnp
 
 testReadFamFile :: Spec
@@ -72,6 +82,15 @@ testReadBedFile :: Spec
 testReadBedFile = describe "readBedFile" $
     it "should read genotypes correctly" $ do
         let fn = "testDat/example.plink.bed"
+        bedDat <- runSafeT $ do
+            bedProd <- readPlinkBedFile fn 5
+            purely P.fold list bedProd
+        bedDat `shouldBe` mockDatPlinkBed
+
+testReadBedFileCompressed :: Spec
+testReadBedFileCompressed = describe "readBedFile with gzip" $
+    it "should read genotypes correctly" $ do
+        let fn = "testDat/example.plink.bed.gz"
         bedDat <- runSafeT $ do
             bedProd <- readPlinkBedFile fn 5
             purely P.fold list bedProd
@@ -120,7 +139,7 @@ testFam2Ind = describe "plinkFam2EigenstratInd" $ do
     it "should correctly convert with both-option when they are the same" $ do
         let fam = PlinkFamEntry "Pop1" "SAMPLE0" "0" "0" Female "Pop1"
         plinkFam2EigenstratInd PlinkPopNameAsBoth fam `shouldBe` EigenstratIndEntry "SAMPLE0" Female "Pop1"
-    
+
 testInd2Fam :: Spec
 testInd2Fam = describe "eigenstratInd2PlinkFam" $ do
     it "should correctly convert with family-option" $ do

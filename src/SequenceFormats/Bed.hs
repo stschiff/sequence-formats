@@ -45,7 +45,7 @@ filterThroughBed bedProd posFunc gProd = do
             recurseNextG = do
                 f' <- lift $ next gRest
                 case f' of
-                    Left () -> return ()
+                    Left ()               -> return ()
                     Right (nextG, gRest') -> go bedCurrent nextG bedRest gRest'
         case bedCurrent `checkIntervalStatus` gCurrent of
             BedBehind -> recurseNextBed

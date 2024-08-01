@@ -1,16 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 module SequenceFormats.Pileup (readPileupFromStdIn, readPileupFromFile, PileupRow(..), Strand(..)) where
 
-import Control.Monad.Catch (MonadThrow)
-import Control.Monad.IO.Class (MonadIO)
+import           Control.Monad.Catch              (MonadThrow)
+import           Control.Monad.IO.Class           (MonadIO)
 import qualified Data.Attoparsec.ByteString.Char8 as A
-import qualified Data.ByteString.Char8 as B
-import Data.Char (toUpper)
-import Pipes (Producer)
-import qualified Pipes.ByteString as PB
-import Pipes.Safe (MonadSafe)
+import qualified Data.ByteString.Char8            as B
+import           Data.Char                        (toUpper)
+import           Pipes                            (Producer)
+import qualified Pipes.ByteString                 as PB
+import           Pipes.Safe                       (MonadSafe)
 
-import SequenceFormats.Utils (Chrom(..), word, readFileProd, consumeProducer)
+import           SequenceFormats.Utils            (Chrom (..), consumeProducer,
+                                                   readFileProd, word)
 
 -- |A datatype to represent the strand orientation of a single base.
 data Strand = ForwardStrand | ReverseStrand deriving (Eq, Show)
@@ -19,10 +20,10 @@ data Strand = ForwardStrand | ReverseStrand deriving (Eq, Show)
 -- The constructor arguments are: Chromosome, Position, Refererence Allelele,
 -- Pileup String per individual
 data PileupRow = PileupRow {
-    pileupChrom :: Chrom, -- ^The chromosome
-    pileupPos :: Int, -- ^The position
-    pileupRef :: Char, -- ^The reference base
-    pileupBases :: [String], -- ^The base string
+    pileupChrom      :: Chrom, -- ^The chromosome
+    pileupPos        :: Int, -- ^The position
+    pileupRef        :: Char, -- ^The reference base
+    pileupBases      :: [String], -- ^The base string
     pileupStrandInfo :: [[Strand]]
  } deriving (Eq, Show)
 
@@ -42,7 +43,7 @@ pileupParser = do
     pos <- A.decimal
     _ <- A.space
     refA <- toUpper <$> A.letter_ascii
-     -- we used to parse only ACTGN and M and the small-letter versions of those, 
+     -- we used to parse only ACTGN and M and the small-letter versions of those,
      -- but it turns out that there can be more letter from the IUPAC alphabet that can occur in
      -- fasta reference files, so here we're parsing them all in principle.
      -- Also, for some reason, there is an M in the human reference at
@@ -72,7 +73,7 @@ processPileupEntry refA cov readBaseString =
         | x `elem` ("ACTGN" :: String) = (x, ForwardStrand) : go xs
         | x `elem` ("actgn" :: String) = (toUpper x, ReverseStrand) : go xs
         | x `elem` ("$*#<>" :: String) = go xs
-        | x == '^' = go (drop 1 xs) -- skip the next character, which is the mapping quality 
+        | x == '^' = go (drop 1 xs) -- skip the next character, which is the mapping quality
         | x == '+' || x == '-' =  -- insertions or deletions, followed by a decimal number
             case reads xs of
                 [(num, rest)] -> go (drop num rest)

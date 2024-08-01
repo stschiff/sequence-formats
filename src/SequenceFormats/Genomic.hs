@@ -1,13 +1,13 @@
 module SequenceFormats.Genomic where
 
-import SequenceFormats.Bed (BedEntry(..), filterThroughBed)
-import SequenceFormats.Eigenstrat (EigenstratSnpEntry(..))
-import SequenceFormats.FreqSum (FreqSumEntry(..))
-import SequenceFormats.Pileup (PileupRow(..))
-import SequenceFormats.Utils (Chrom)
-import SequenceFormats.VCF (VCFentry(..))
+import           SequenceFormats.Bed        (BedEntry (..), filterThroughBed)
+import           SequenceFormats.Eigenstrat (EigenstratSnpEntry (..))
+import           SequenceFormats.FreqSum    (FreqSumEntry (..))
+import           SequenceFormats.Pileup     (PileupRow (..))
+import           SequenceFormats.Utils      (Chrom)
+import           SequenceFormats.VCF        (VCFentry (..))
 
-import Pipes (Producer)
+import           Pipes                      (Producer)
 
 class Genomic a where
     genomicPosition :: a -> (Chrom, Int)
@@ -15,7 +15,7 @@ class Genomic a where
     genomicChrom :: a -> Chrom
     genomicChrom = fst . genomicPosition
 
-    genomicBase :: a -> Int 
+    genomicBase :: a -> Int
     genomicBase = snd . genomicPosition
 
 instance Genomic EigenstratSnpEntry where

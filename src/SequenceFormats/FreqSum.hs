@@ -4,30 +4,31 @@
 <https://rarecoal-docs.readthedocs.io/en/latest/rarecoal-tools.html#vcf2freqsum>
 -}
 
-module SequenceFormats.FreqSum (readFreqSumStdIn, readFreqSumFile, FreqSumEntry(..),  
+module SequenceFormats.FreqSum (readFreqSumStdIn, readFreqSumFile, FreqSumEntry(..),
     FreqSumHeader(..), printFreqSumStdOut, printFreqSumFile, freqSumEntryToText) where
 
-import SequenceFormats.Utils (consumeProducer, Chrom(..), readFileProd)
+import           SequenceFormats.Utils            (Chrom (..), consumeProducer,
+                                                   readFileProd)
 
-import Control.Applicative ((<|>))
-import Control.Monad.Catch (MonadThrow, throwM)
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.State.Strict (runStateT)
+import           Control.Applicative              ((<|>))
+import           Control.Monad.Catch              (MonadThrow, throwM)
+import           Control.Monad.IO.Class           (MonadIO, liftIO)
+import           Control.Monad.Trans.State.Strict (runStateT)
 import qualified Data.Attoparsec.ByteString.Char8 as A
-import Data.Char (isAlphaNum, isSpace)
-import qualified Data.ByteString.Char8 as B
-import Pipes (Producer, (>->), Consumer)
-import Pipes.Attoparsec (parse, ParsingError(..))
-import qualified Pipes.Prelude as P
-import Pipes.Safe (MonadSafe)
-import Pipes.Safe.Prelude (withFile)
-import qualified Pipes.ByteString as PB
-import Prelude hiding (putStr)
-import System.IO (IOMode(..))
+import qualified Data.ByteString.Char8            as B
+import           Data.Char                        (isAlphaNum, isSpace)
+import           Pipes                            (Consumer, Producer, (>->))
+import           Pipes.Attoparsec                 (ParsingError (..), parse)
+import qualified Pipes.ByteString                 as PB
+import qualified Pipes.Prelude                    as P
+import           Pipes.Safe                       (MonadSafe)
+import           Pipes.Safe.Prelude               (withFile)
+import           Prelude                          hiding (putStr)
+import           System.IO                        (IOMode (..))
 
 -- |A Datatype representing the Header
 data FreqSumHeader = FreqSumHeader {
-    fshNames :: [String], -- ^A list of individual or group names
+    fshNames  :: [String], -- ^A list of individual or group names
     fshCounts :: [Int] -- ^A list of haplotype counts per individual/group.
 } deriving (Eq, Show)
 
@@ -39,13 +40,13 @@ freqSumHeaderToText (FreqSumHeader names nCounts) =
 
 -- |A Datatype to denote a single freqSum line
 data FreqSumEntry = FreqSumEntry {
-    fsChrom  :: Chrom, -- ^The chromosome of the site
-    fsPos    :: Int, -- ^The position of the site
-    fsSnpId  :: Maybe B.ByteString, -- ^An optional parameter to take the snpId. This is not parsed from or printed to freqSum format but is used in internal conversions from Eigenstrat.
+    fsChrom      :: Chrom, -- ^The chromosome of the site
+    fsPos        :: Int, -- ^The position of the site
+    fsSnpId      :: Maybe B.ByteString, -- ^An optional parameter to take the snpId. This is not parsed from or printed to freqSum format but is used in internal conversions from Eigenstrat.
     fsGeneticPos :: Maybe Double, -- ^An optional parameter to take the genetic pos. This is not parsed from or printed to freqSum format but is used in internal conversions from Eigenstrat.
-    fsRef    :: Char, -- ^The reference allele
-    fsAlt    :: Char, -- ^The alternative allele
-    fsCounts :: [Maybe Int] -- ^A list of allele counts in each group. Nothing denotes missing data.
+    fsRef        :: Char, -- ^The reference allele
+    fsAlt        :: Char, -- ^The alternative allele
+    fsCounts     :: [Maybe Int] -- ^A list of allele counts in each group. Nothing denotes missing data.
 } deriving (Eq, Show)
 
 -- |This function converts a single freqSum entry to a printable freqSum line.
@@ -53,8 +54,8 @@ freqSumEntryToText :: FreqSumEntry -> B.ByteString
 freqSumEntryToText (FreqSumEntry chrom pos _ _ ref alt maybeCounts) =
     B.intercalate "\t" [unChrom chrom, B.pack (show pos), B.singleton ref, B.singleton alt, countStr] <> "\n"
   where
-    countStr = B.intercalate "\t" . map (B.pack . show . convertToNum) $ maybeCounts 
-    convertToNum Nothing = -1
+    countStr = B.intercalate "\t" . map (B.pack . show . convertToNum) $ maybeCounts
+    convertToNum Nothing  = -1
     convertToNum (Just a) = a
 
 readFreqSumProd :: (MonadThrow m) =>
@@ -62,8 +63,8 @@ readFreqSumProd :: (MonadThrow m) =>
 readFreqSumProd prod = do
     (res, rest) <- runStateT (parse parseFreqSumHeader) prod
     header <- case res of
-        Nothing -> throwM $ ParsingError [] "freqSum file exhausted"
-        Just (Left e) -> throwM e
+        Nothing        -> throwM $ ParsingError [] "freqSum file exhausted"
+        Just (Left e)  -> throwM e
         Just (Right h) -> return h
     return (header, consumeProducer parseFreqSumEntry rest)
 

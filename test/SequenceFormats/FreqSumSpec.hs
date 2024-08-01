@@ -1,15 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 module SequenceFormats.FreqSumSpec (spec) where
 
-import SequenceFormats.FreqSum (readFreqSumFile, printFreqSumFile, FreqSumEntry(..), 
-    FreqSumHeader(..))
-import SequenceFormats.Utils (Chrom(..))
+import           SequenceFormats.FreqSum (FreqSumEntry (..), FreqSumHeader (..),
+                                          printFreqSumFile, readFreqSumFile)
+import           SequenceFormats.Utils   (Chrom (..))
 
-import Control.Foldl (purely, list)
-import Pipes (each, runEffect, (>->))
-import qualified Pipes.Prelude as P
-import Pipes.Safe (runSafeT)
-import Test.Hspec
+import           Control.Foldl           (list, purely)
+import           Pipes                   (each, runEffect, (>->))
+import qualified Pipes.Prelude           as P
+import           Pipes.Safe              (runSafeT)
+import           Test.Hspec
 
 spec :: Spec
 spec = do
@@ -23,9 +23,9 @@ testReadFreqSumFile = describe "readFreqSumFile" $ do
         fsEntries_ <- purely P.fold list fsProd_
         return (fsHeader_, fsEntries_)
     it "should read the correct fs header" $
-        fsHeader `shouldBe` mockDatFsHeader 
+        fsHeader `shouldBe` mockDatFsHeader
     it "should read the correct fs entries" $
-        fsEntries `shouldBe` mockDatFsEntries 
+        fsEntries `shouldBe` mockDatFsEntries
 
 testPrintFreqSumFile :: Spec
 testPrintFreqSumFile = describe "printFreqSumFile" $ do
@@ -37,11 +37,11 @@ testPrintFreqSumFile = describe "printFreqSumFile" $ do
         fsEntries_ <- purely P.fold list fsProd_
         return (fsHeader_, fsEntries_)
     it "should read the correct fs header after writing" $
-        fsHeader `shouldBe` mockDatFsHeader 
+        fsHeader `shouldBe` mockDatFsHeader
     it "should read the correct fs entries after writing" $
-        fsEntries `shouldBe` mockDatFsEntries 
+        fsEntries `shouldBe` mockDatFsEntries
 
-mockDatFsHeader :: FreqSumHeader 
+mockDatFsHeader :: FreqSumHeader
 mockDatFsHeader = FreqSumHeader names numbers
   where
     names = ["SAMPLE0", "SAMPLE1", "SAMPLE2", "SAMPLE3", "SAMPLE4"]

@@ -1,15 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 module SequenceFormats.BedSpec (spec) where
 
-import Control.Foldl (purely, list)
-import Pipes (each)
-import qualified Pipes.Prelude as P
-import Pipes.Safe (runSafeT)
-import SequenceFormats.Bed (BedEntry(..), readBedFile)
-import SequenceFormats.Genomic (genomicFilterThroughBed)
-import SequenceFormats.Eigenstrat (EigenstratSnpEntry(EigenstratSnpEntry))
-import SequenceFormats.Utils (Chrom(..))
-import Test.Hspec
+import           Control.Foldl              (list, purely)
+import           Pipes                      (each)
+import qualified Pipes.Prelude              as P
+import           Pipes.Safe                 (runSafeT)
+import           SequenceFormats.Bed        (BedEntry (..), readBedFile)
+import           SequenceFormats.Eigenstrat (EigenstratSnpEntry (EigenstratSnpEntry))
+import           SequenceFormats.Genomic    (genomicFilterThroughBed)
+import           SequenceFormats.Utils      (Chrom (..))
+import           Test.Hspec
 
 spec :: Spec
 spec = do
@@ -21,12 +21,12 @@ mockDatBed = [
     BedEntry (Chrom "11") 0 100,
     BedEntry (Chrom "11") 200 300,
     BedEntry (Chrom "11") 400 500]
-    
+
 testReadBed :: Spec
 testReadBed = describe "readBed" $ do
     it "should read the correct eigenstrat file" $ do
         bedEntries <- runSafeT $ purely P.fold list (readBedFile "testDat/example.bed")
-        bedEntries `shouldBe` mockDatBed 
+        bedEntries `shouldBe` mockDatBed
 
 mockDatEigenstratSnp :: [EigenstratSnpEntry]
 mockDatEigenstratSnp = [

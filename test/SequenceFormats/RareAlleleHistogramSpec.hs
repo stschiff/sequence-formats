@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 module SequenceFormats.RareAlleleHistogramSpec (spec) where
 
-import SequenceFormats.RareAlleleHistogram (RareAlleleHistogram(..), readHistogram, writeHistogramFile)
+import           SequenceFormats.RareAlleleHistogram (RareAlleleHistogram (..),
+                                                      readHistogram,
+                                                      writeHistogramFile)
 
-import qualified Data.Map as Map
-import Test.Hspec
+import qualified Data.Map                            as Map
+import           Test.Hspec
 
 spec :: Spec
 spec = do

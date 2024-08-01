@@ -1,16 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 module SequenceFormats.EigenstratSpec (spec) where
 
-import Control.Foldl (purely, list)
-import Control.Monad.IO.Class (liftIO)
-import Data.Vector (fromList)
-import Pipes (each, runEffect, (>->))
-import qualified Pipes.Prelude as P
-import Pipes.Safe (runSafeT)
-import SequenceFormats.Eigenstrat (readEigenstrat, writeEigenstrat,
-    EigenstratSnpEntry(..), EigenstratIndEntry(..), GenoLine, Sex(..), GenoEntry(..))
-import SequenceFormats.Utils (Chrom(..))
-import Test.Hspec
+import           Control.Foldl              (list, purely)
+import           Control.Monad.IO.Class     (liftIO)
+import           Data.Vector                (fromList)
+import           Pipes                      (each, runEffect, (>->))
+import qualified Pipes.Prelude              as P
+import           Pipes.Safe                 (runSafeT)
+import           SequenceFormats.Eigenstrat (EigenstratIndEntry (..),
+                                             EigenstratSnpEntry (..),
+                                             GenoEntry (..), GenoLine, Sex (..),
+                                             readEigenstrat, writeEigenstrat)
+import           SequenceFormats.Utils      (Chrom (..))
+import           Test.Hspec
 
 spec :: Spec
 spec = do
@@ -44,7 +46,7 @@ mockDatEigenstratGeno = [
     fromList [HomRef, Het, Het, HomAlt, HomAlt],
     fromList [HomAlt, HomAlt, Het, Missing, Het],
     fromList [HomRef, HomRef, Het, Missing, Missing]]
-    
+
 testReadEigenstrat :: Spec
 testReadEigenstrat = describe "readEigenstrat" $ do
     it "should read the correct eigenstrat file" $ do
@@ -52,9 +54,9 @@ testReadEigenstrat = describe "readEigenstrat" $ do
             esIndFile = "testDat/example.ind"
             esGenoFile = "testDat/example.eigenstratgeno"
         (indEntries, esProd) <- runSafeT $ readEigenstrat esGenoFile esSnpFile esIndFile
-        indEntries `shouldBe` mockDatEigenstratInd 
+        indEntries `shouldBe` mockDatEigenstratInd
         snpGenoEntries <- runSafeT $ purely P.fold list esProd
-        (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp 
+        (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp
         (map snd snpGenoEntries) `shouldBe` mockDatEigenstratGeno
 
 testWriteEigenstrat :: Spec
@@ -69,7 +71,7 @@ testWriteEigenstrat = describe "writeEigenstrat" $ do
         liftIO . runSafeT . runEffect $
             testDatJointProd >-> writeEigenstrat tmpGeno tmpSnp tmpInd mockDatEigenstratInd
         (indEntries, esProd) <- liftIO . runSafeT $ readEigenstrat tmpGeno tmpSnp tmpInd
-        indEntries `shouldBe` mockDatEigenstratInd 
+        indEntries `shouldBe` mockDatEigenstratInd
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
         (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp
         (map snd snpGenoEntries) `shouldBe` mockDatEigenstratGeno

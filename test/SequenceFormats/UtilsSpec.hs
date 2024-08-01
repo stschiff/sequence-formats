@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 module SequenceFormats.UtilsSpec (spec) where
 
-import SequenceFormats.Utils (Chrom(..), SeqFormatException(..))
+import           SequenceFormats.Utils (Chrom (..), SeqFormatException (..))
 
-import Control.Exception (evaluate)
-import Test.Hspec
+import           Control.Exception     (evaluate)
+import           Test.Hspec
 
 spec :: Spec
 spec = testChrom
@@ -31,5 +31,5 @@ testChrom = describe "Chrom" $ do
         Chrom "X" < Chrom "chrMT" `shouldBe` True
     specify "chrSSS should throw" $
         evaluate (Chrom "chrSSS" < Chrom "chrMT") `shouldThrow` (==SeqFormatException "cannot parse chromosome SSS")
-    
+
 
