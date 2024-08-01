@@ -17,6 +17,7 @@ import           Test.Hspec
 spec :: Spec
 spec = do
     testReadEigenstrat
+    testReadEigenstratCompressed
     testWriteEigenstrat
 
 mockDatEigenstratSnp :: [EigenstratSnpEntry]
@@ -58,6 +59,19 @@ testReadEigenstrat = describe "readEigenstrat" $ do
         snpGenoEntries <- runSafeT $ purely P.fold list esProd
         (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp
         (map snd snpGenoEntries) `shouldBe` mockDatEigenstratGeno
+
+testReadEigenstratCompressed :: Spec
+testReadEigenstratCompressed = describe "readEigenstrat with gzip" $ do
+    it "should read the correct eigenstrat file" $ do
+        let esSnpFile = "testDat/example.snp.gz"
+            esIndFile = "testDat/example.ind"
+            esGenoFile = "testDat/example.eigenstratgeno.gz"
+        (indEntries, esProd) <- runSafeT $ readEigenstrat esGenoFile esSnpFile esIndFile
+        indEntries `shouldBe` mockDatEigenstratInd
+        snpGenoEntries <- runSafeT $ purely P.fold list esProd
+        (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp
+        (map snd snpGenoEntries) `shouldBe` mockDatEigenstratGeno
+
 
 testWriteEigenstrat :: Spec
 testWriteEigenstrat = describe "writeEigenstrat" $ do

@@ -13,7 +13,8 @@ module SequenceFormats.Eigenstrat (EigenstratSnpEntry(..), EigenstratIndEntry(..
 import           SequenceFormats.Utils            (Chrom (..),
                                                    SeqFormatException (..),
                                                    consumeProducer,
-                                                   readFileProd, word)
+                                                   readFileProdCheckCompress,
+                                                   word)
 
 import           Control.Applicative              ((<|>))
 import           Control.Exception                (throw)
@@ -121,7 +122,11 @@ readEigenstratSnpStdIn = consumeProducer eigenstratSnpParser PB.stdin
 
 -- |Function to read a Snp File from a file. Returns a Pipes-Producer over the EigenstratSnpEntries.
 readEigenstratSnpFile :: (MonadSafe m) => FilePath -> Producer EigenstratSnpEntry m ()
-readEigenstratSnpFile = consumeProducer eigenstratSnpParser . readFileProd
+readEigenstratSnpFile = consumeProducer eigenstratSnpParser . readFileProdCheckCompress
+
+-- |Function to read a Geno File from a file. Returns a Pipes-Producer over the GenoLines.
+readEigenstratGenoFile :: (MonadSafe m) => FilePath -> Producer GenoLine m ()
+readEigenstratGenoFile = consumeProducer eigenstratGenoParser . readFileProdCheckCompress
 
 -- |Function to read a full Eigenstrat database from files. Returns a pair of the Eigenstrat Individual Entries, and a joint Producer over the snp entries and the genotypes.
 readEigenstrat :: (MonadSafe m) => FilePath -- ^The Genotype file
@@ -131,8 +136,7 @@ readEigenstrat :: (MonadSafe m) => FilePath -- ^The Genotype file
 readEigenstrat genoFile snpFile indFile = do
     indEntries <- readEigenstratInd indFile
     let snpProd = readEigenstratSnpFile snpFile
-        genoProd = consumeProducer eigenstratGenoParser (readFileProd genoFile) >->
-            validateEigenstratEntries (length indEntries)
+        genoProd = readEigenstratGenoFile genoFile >-> validateEigenstratEntries (length indEntries)
     return (indEntries, P.zip snpProd genoProd)
 
 validateEigenstratEntries :: (MonadThrow m) => Int -> Pipe GenoLine GenoLine m ()
