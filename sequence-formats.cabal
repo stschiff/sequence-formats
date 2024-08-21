@@ -14,20 +14,25 @@ Bug-Reports:         https://github.com/stschiff/sequence-formats/issues
 
 extra-source-files:  README.md,
                      Changelog.md,
-                     testDat/example.bed
+                     testDat/example.bed,
                      testDat/example.eigenstratgeno,
+                     testDat/example.eigenstratgeno.gz,
+                     testDat/example.fam,
                      testDat/example.fasta,
                      testDat/example.freqsum,
                      testDat/example.histogram.txt,
                      testDat/example.ind,
-                     testDat/example.snp,
-                     testDat/example.vcf,
-                     testDat/example.pileup
-                     testDat/example.fam
-                     testDat/example.plink.bed
+                     testDat/example.pileup,
+                     testDat/example.plink.bed,
+                     testDat/example.plink.bed.gz,
+                     testDat/example.plink.bim,
+                     testDat/example.plink.bim.gz,
                      testDat/example.plink.fam
-                     testDat/example.plink.bim
-
+                     testDat/example.snp,
+                     testDat/example.snp.gz,
+                     testDat/example.vcf,
+                     testDat/example.vcf.gz
+                     
 library
   exposed-modules:     SequenceFormats.RareAlleleHistogram,
                        SequenceFormats.FreqSum,
