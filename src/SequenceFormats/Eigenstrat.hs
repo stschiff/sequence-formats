@@ -23,10 +23,12 @@ import           Control.Monad.Catch              (MonadThrow)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
 import qualified Data.Attoparsec.ByteString.Char8 as A
 import qualified Data.ByteString.Char8            as B
+import           Data.List                        (isSuffixOf)
 import           Data.Vector                      (Vector, fromList, toList)
 import           Pipes                            (Consumer, Pipe, Producer,
                                                    cat, for, yield, (>->))
 import qualified Pipes.ByteString                 as PB
+import           Pipes.GZip                       (CompressionLevel, compress, defaultCompression)
 import qualified Pipes.Prelude                    as P
 import           Pipes.Safe                       (MonadSafe)
 import qualified Pipes.Safe.Prelude               as PS
@@ -162,25 +164,29 @@ writeEigenstratIndFile f indEntries =
         Unknown -> "U"
 
 -- |Function to write an Eigenstrat Snp File. Returns a consumer expecting EigenstratSnpEntries.
-writeEigenstratSnp :: (MonadIO m) => Handle -- ^The Eigenstrat Snp File Handle.
+writeEigenstratSnp :: (MonadIO m) => Maybe CompressionLevel -- ^If Nothing, then no compression
+    -> Handle -- ^The Eigenstrat Snp File Handle.
     -> Consumer EigenstratSnpEntry m () -- ^A consumer to read EigenstratSnpEntries
-writeEigenstratSnp snpFileH =
+writeEigenstratSnp maybeCompression snpFileH =
     let snpOutTextConsumer = PB.toHandle snpFileH
         toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt) ->
             let snpLine = B.intercalate "\t" [gid, unChrom chrom, B.pack (show gpos),
                     B.pack (show pos), B.singleton ref, B.singleton alt]
             in  snpLine <> "\n")
-    in  toTextPipe >-> snpOutTextConsumer
+        compressFunc = maybe id compress maybeCompression
+    in  compressFunc toTextPipe >-> snpOutTextConsumer
 
 -- |Function to write an Eigentrat Geno File. Returns a consumer expecting Eigenstrat Genolines.
-writeEigenstratGeno :: (MonadIO m) => Handle -- ^The Genotype file handle
-                -> Consumer GenoLine m () -- ^A consumer to read Genotype entries.
-writeEigenstratGeno genoFileH =
+writeEigenstratGeno :: (MonadIO m) => Maybe CompressionLevel -- ^If Nothing, then no compression
+    -> Handle -- ^The Genotype file handle
+    -> Consumer GenoLine m () -- ^A consumer to read Genotype entries.
+writeEigenstratGeno maybeCompression genoFileH =
     let genoOutTextConsumer = PB.toHandle genoFileH
         toTextPipe = P.map (\genoLine ->
             let genoLineStr = B.concat . map (B.pack . show . toEigenStratNum) . toList $ genoLine
             in  genoLineStr <> "\n")
-    in  toTextPipe >-> genoOutTextConsumer
+        compressFunc = maybe id compress maybeCompression
+    in  compressFunc toTextPipe >-> genoOutTextConsumer
   where
     toEigenStratNum c = case c of
         HomRef  -> 2 :: Int
@@ -195,8 +201,10 @@ writeEigenstrat :: (MonadSafe m) => FilePath -- ^The Genotype file
                 -> [EigenstratIndEntry] -- ^The list of individual entries
                 -> Consumer (EigenstratSnpEntry, GenoLine) m () -- ^A consumer to read joint Snp/Genotype entries.
 writeEigenstrat genoFile snpFile indFile indEntries = do
+    let snpCompress  = if ".gz" `isSuffixOf` snpFile  then Just defaultCompression else Nothing
+    let genoCompress = if ".gz" `isSuffixOf` genoFile then Just defaultCompression else Nothing
     liftIO $ writeEigenstratIndFile indFile indEntries
-    let snpOutConsumer = PS.withFile snpFile WriteMode writeEigenstratSnp
-        genoOutConsumer = PS.withFile genoFile WriteMode writeEigenstratGeno
+    let snpOutConsumer  = PS.withFile snpFile  WriteMode (writeEigenstratSnp snpCompress)
+        genoOutConsumer = PS.withFile genoFile WriteMode (writeEigenstratGeno genoCompress)
     P.tee (P.map fst >-> snpOutConsumer) >-> P.map snd >-> genoOutConsumer
 
