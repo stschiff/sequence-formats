@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module SequenceFormats.EigenstratSpec (spec) where
+module SequenceFormats.EigenstratSpec where
 
 import           Control.Foldl              (list, purely)
 import           Control.Monad.IO.Class     (liftIO)
@@ -19,6 +19,7 @@ spec = do
     testReadEigenstrat
     testReadEigenstratCompressed
     testWriteEigenstrat
+    testWriteEigenstratCompressed
 
 mockDatEigenstratSnp :: [EigenstratSnpEntry]
 mockDatEigenstratSnp = [
@@ -78,6 +79,23 @@ testWriteEigenstrat = describe "writeEigenstrat" $ do
     it "should write and read back eigenstrat data correctly" $ do
         let tmpGeno = "/tmp/eigenstratWriteTest.geno"
             tmpSnp = "/tmp/eigenstratWriteTest.snp"
+            tmpInd = "/tmp/eigenstratWriteTest.ind"
+            testDatSnpProd = each mockDatEigenstratSnp
+            testDatGenoProd = each mockDatEigenstratGeno
+            testDatJointProd = P.zip testDatSnpProd testDatGenoProd
+        liftIO . runSafeT . runEffect $
+            testDatJointProd >-> writeEigenstrat tmpGeno tmpSnp tmpInd mockDatEigenstratInd
+        (indEntries, esProd) <- liftIO . runSafeT $ readEigenstrat tmpGeno tmpSnp tmpInd
+        indEntries `shouldBe` mockDatEigenstratInd
+        snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
+        (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp
+        (map snd snpGenoEntries) `shouldBe` mockDatEigenstratGeno
+
+testWriteEigenstratCompressed :: Spec
+testWriteEigenstratCompressed = describe "writeEigenstrat with gzip" $ do
+    it "should write and read back eigenstrat data correctly" $ do
+        let tmpGeno = "/tmp/eigenstratWriteTest.geno"
+            tmpSnp = "/tmp/eigenstratWriteTest.snp.gz"
             tmpInd = "/tmp/eigenstratWriteTest.ind"
             testDatSnpProd = each mockDatEigenstratSnp
             testDatGenoProd = each mockDatEigenstratGeno
