@@ -107,3 +107,10 @@ testWriteEigenstratCompressed = describe "writeEigenstrat with gzip" $ do
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
         (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp
         (map snd snpGenoEntries) `shouldBe` mockDatEigenstratGeno
+
+testWriteGenoGzip :: IO ()
+testWriteGenoGzip = do
+    let testDatProd = each ["hello\n", "world\n", "you\n"]
+        fileCons = PS.withFile "/tmp/testABC.txt" WriteMode PB.toHandle
+        compressFunc prod = compress defaultCompression prod
+    runSafeT . runEffect $ compressFunc testDatProd >-> fileCons
