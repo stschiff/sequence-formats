@@ -14,6 +14,11 @@ import           SequenceFormats.Eigenstrat (EigenstratIndEntry (..),
 import           SequenceFormats.Utils      (Chrom (..))
 import           Test.Hspec
 
+import qualified Pipes.Safe.Prelude as PS
+import System.IO (IOMode(..))
+import SequenceFormats.Eigenstrat (writeEigenstratSnp)
+import Pipes.GZip (defaultCompression)
+
 spec :: Spec
 spec = do
     testReadEigenstrat
@@ -110,7 +115,5 @@ testWriteEigenstratCompressed = describe "writeEigenstrat with gzip" $ do
 
 testWriteGenoGzip :: IO ()
 testWriteGenoGzip = do
-    let testDatProd = each ["hello\n", "world\n", "you\n"]
-        fileCons = PS.withFile "/tmp/testABC.txt" WriteMode PB.toHandle
-        compressFunc prod = compress defaultCompression prod
-    runSafeT . runEffect $ compressFunc testDatProd >-> fileCons
+    let cons = PS.withFile "/tmp/testABC.snp.gz" WriteMode (writeEigenstratSnp (Just defaultCompression))
+    runSafeT . runEffect $ each mockDatEigenstratSnp >-> cons

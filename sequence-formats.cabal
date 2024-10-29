@@ -51,7 +51,7 @@ Test-Suite sequenceFormatTests
   main-is:             Spec.hs
   hs-source-dirs:      test
   build-depends:       base, sequence-formats, foldl, pipes, pipes-safe, tasty, vector,
-                       transformers, tasty-hunit, bytestring, containers, hspec
+                       transformers, tasty-hunit, bytestring, containers, hspec, pipes-zlib
   other-modules:       SequenceFormats.EigenstratSpec,
                        SequenceFormats.BedSpec,
                        SequenceFormats.FastaSpec,
