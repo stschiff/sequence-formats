@@ -240,9 +240,9 @@ writePlink :: (MonadSafe m) => FilePath -- ^The Bed file
                 -> FilePath -- ^The Bim File
                 -> FilePath -- ^The Fam file
                 -> [PlinkFamEntry] -- ^The list of individual entries
-                -> m (Consumer (EigenstratSnpEntry, GenoLine) m ()) -- ^A consumer to read joint Snp/Genotype entries.
+                -> Consumer (EigenstratSnpEntry, GenoLine) m () -- ^A consumer to read joint Snp/Genotype entries.
 writePlink bedFile bimFile famFile indEntries = do
     liftIO $ writeFam famFile indEntries
     let bimOutConsumer = writeBim bimFile
         bedOutConsumer = writeBed bedFile
-    return $ P.tee (P.map fst >-> bimOutConsumer) >-> P.map snd >-> bedOutConsumer
+    P.tee (P.map fst >-> bimOutConsumer) >-> P.map snd >-> bedOutConsumer

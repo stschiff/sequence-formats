@@ -210,10 +210,10 @@ writeEigenstrat :: (MonadSafe m) => FilePath -- ^The Genotype file
                 -> FilePath -- ^The Snp File
                 -> FilePath -- ^The Ind file
                 -> [EigenstratIndEntry] -- ^The list of individual entries
-                -> m (Consumer (EigenstratSnpEntry, GenoLine) m ()) -- ^A consumer to read joint Snp/Genotype entries.
+                -> Consumer (EigenstratSnpEntry, GenoLine) m () -- ^A consumer to read joint Snp/Genotype entries.
 writeEigenstrat genoFile snpFile indFile indEntries = do
     liftIO $ writeEigenstratIndFile indFile indEntries
     let snpOutConsumer  = writeEigenstratSnp  snpFile
         genoOutConsumer = writeEigenstratGeno genoFile
-    return $ P.tee (P.map fst >-> snpOutConsumer) >-> P.map snd >-> genoOutConsumer
+    P.tee (P.map fst >-> snpOutConsumer) >-> P.map snd >-> genoOutConsumer
 
