@@ -18,7 +18,7 @@ import           SequenceFormats.Eigenstrat       (EigenstratIndEntry (..),
                                                    Sex (..))
 import           SequenceFormats.Utils            (Chrom (..), consumeProducer,
                                                    readFileProdCheckCompress,
-                                                   word)
+                                                   word, gzipConsumer, writeFromPopper)
 
 import           Control.Applicative              ((<|>))
 import           Control.Monad                    (forM_, void)
@@ -31,12 +31,12 @@ import           Data.Bits                        (shiftL, shiftR, (.&.), (.|.))
 import qualified Data.ByteString                  as BB
 import qualified Data.ByteString.Char8            as B
 import           Data.List                        (intercalate, isSuffixOf)
+import qualified Data.Streaming.Zlib              as Z
 import           Data.Vector                      (fromList, toList)
 import           Data.Word                        (Word8)
-import           Pipes                            (Consumer, Producer, (>->))
+import           Pipes                            (Consumer, Producer, (>->), runEffect)
 import           Pipes.Attoparsec                 (ParsingError (..), parse)
 import qualified Pipes.ByteString                 as PB
-import           Pipes.GZip                       (CompressionLevel, compress, defaultCompression)
 import qualified Pipes.Prelude                    as P
 import           Pipes.Safe                       (MonadSafe)
 import qualified Pipes.Safe.Prelude               as PS
@@ -168,17 +168,18 @@ readPlink bedFile bimFile famFile = do
     return (indEntries, P.zip snpProd genoProd)
 
 -- |Function to write a Bim file. Returns a consumer expecting EigenstratSnpEntries.
-writeBim :: (MonadIO m) => Maybe CompressionLevel -- ^If Nothing, then no Compression
+writeBim :: (MonadIO m) => Maybe Z.Deflate -- ^If Nothing, then no Compression
     -> Handle -- ^The Eigenstrat Snp File handle.
     -> Consumer EigenstratSnpEntry m () -- ^A consumer to read EigenstratSnpEntries
-writeBim maybeCompression snpFileH =
-    let snpOutTextConsumer = PB.toHandle snpFileH
+writeBim maybeDeflate snpFileH =
+    let snpOutTextConsumer = case maybeDeflate of
+            Nothing -> PB.toHandle snpFileH
+            Just def -> gzipConsumer def snpFileH
         toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt) ->
             let bimLine = B.intercalate "\t" [unChrom chrom, gid, B.pack (show gpos),
                     B.pack (show pos), B.singleton ref, B.singleton alt]
             in  bimLine <> "\n")
-        compressFunc = maybe id compress maybeCompression
-    in  compressFunc toTextPipe >-> snpOutTextConsumer
+    in  toTextPipe >-> snpOutTextConsumer
 
 -- |Function to write a Plink Fam file.
 writeFam :: (MonadIO m) => FilePath -> [PlinkFamEntry] -> m ()
@@ -193,15 +194,21 @@ writeFam f indEntries =
         Unknown -> "0"
 
 -- |Function to write an Eigentrat Geno File. Returns a consumer expecting Eigenstrat Genolines.
-writeBed :: (MonadIO m) => Maybe CompressionLevel -- ^If Nothing, then no Compression
+writeBed :: (MonadIO m) => Maybe Z.Deflate -- ^If Nothing, then no Compression
   -> Handle -- ^The Bed file handle
   -> Consumer GenoLine m () -- ^A consumer to read Genotype entries.
-writeBed maybeCompression bedFileH = do
-    liftIO $ BB.hPut bedFileH (BB.pack [0b01101100, 0b00011011, 0b00000001])
-    let bedOutConsumer = PB.toHandle bedFileH
-        toPlinkPipe = P.map (BB.pack . genoLineToBytes)
-        compressFunc = maybe id compress maybeCompression
-    compressFunc toPlinkPipe >-> bedOutConsumer
+writeBed maybeDeflate bedFileH = do
+    let stickyBytes = BB.pack [0b01101100, 0b00011011, 0b00000001]
+    bedOutConsumer <- case maybeDeflate of
+        Nothing  -> do
+            liftIO $ BB.hPut bedFileH stickyBytes
+            return $ PB.toHandle bedFileH
+        Just def -> do
+            pop <- liftIO (Z.feedDeflate def stickyBytes)
+            liftIO (writeFromPopper pop bedFileH)
+            return $ gzipConsumer def bedFileH
+    let toPlinkPipe = P.map (BB.pack . genoLineToBytes)
+    toPlinkPipe >-> bedOutConsumer
   where
     genoLineToBytes :: GenoLine -> [Word8]
     genoLineToBytes genoLine = go (toList genoLine)
@@ -226,11 +233,24 @@ writePlink :: (MonadSafe m) => FilePath -- ^The Bed file
                 -> FilePath -- ^The Bim File
                 -> FilePath -- ^The Fam file
                 -> [PlinkFamEntry] -- ^The list of individual entries
-                -> Consumer (EigenstratSnpEntry, GenoLine) m () -- ^A consumer to read joint Snp/Genotype entries.
-writePlink bedFile bimFile famFile indEntries = do
-    let bimCompress = if ".gz" `isSuffixOf` bimFile then Just defaultCompression else Nothing
-    let bedCompress = if ".gz" `isSuffixOf` bedFile then Just defaultCompression else Nothing
+                -> Producer (EigenstratSnpEntry, GenoLine) m () -- ^A consumer to read joint Snp/Genotype entries.
+                -> m ()
+writePlink bedFile bimFile famFile indEntries prod = do
+    bimDeflate <- if ".gz" `isSuffixOf` bimFile then fmap Just . liftIO $ Z.initDeflate 6 (Z.WindowBits 31) else return Nothing
+    bedDeflate <- if ".gz" `isSuffixOf` bedFile then fmap Just . liftIO $ Z.initDeflate 6 (Z.WindowBits 31) else return Nothing
     liftIO $ writeFam famFile indEntries
-    let bimOutConsumer = PS.withFile bimFile WriteMode (writeBim bimCompress)
-        bedOutConsumer = PS.withFile bedFile WriteMode (writeBed bedCompress)
-    P.tee (P.map fst >-> bimOutConsumer) >-> P.map snd >-> bedOutConsumer
+    (_, bimFileH) <- PS.openFile bimFile WriteMode
+    (_, bedFileH) <- PS.openFile bedFile WriteMode
+    let bimOutConsumer = writeBim bimDeflate bimFileH
+        bedOutConsumer = writeBed bedDeflate bedFileH
+    runEffect $ prod >-> P.tee (P.map fst >-> bimOutConsumer) >-> P.map snd >-> bedOutConsumer
+    case bimDeflate of
+        Nothing -> return ()
+        Just def -> do
+            let finalPop = Z.finishDeflate def
+            writeFromPopper finalPop bimFileH
+    case bedDeflate of
+        Nothing -> return ()
+        Just def -> do
+            let finalPop = Z.finishDeflate def
+            writeFromPopper finalPop bedFileH
