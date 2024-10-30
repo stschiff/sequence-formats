@@ -1,5 +1,6 @@
 # Changelog
 
+- V 1.9.0.0: Added gzip-writing support for Eigenstrat and Plink files. This required a breaking change in `writeEigenstrat` and `writePlink`.
 - V 1.8.1.0: Added gzip-support (read-only for now) for Plink (bed and bim files) and VCF.
 - V 1.8.0.1: Allow reading arbitrary letters as reference base in Pileup format. Before only ACTG, N and M were allowed.
     Now all letters are allowed, as we found out that reference fasta files can contain more letters than just those and we
