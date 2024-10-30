@@ -16,7 +16,7 @@ import           SequenceFormats.Utils      (Chrom (..))
 import           Control.Foldl              (list, purely)
 import           Control.Monad.IO.Class     (liftIO)
 import           Data.Vector                (fromList)
-import           Pipes                      (each, runEffect, (>->))
+import           Pipes                      (each)
 import qualified Pipes.Prelude              as P
 import           Pipes.Safe                 (runSafeT)
 import           Test.Hspec
@@ -30,6 +30,7 @@ spec = do
     testReadBedFileCompressed
     testReadPlink
     testWritePlink
+    testWritePlinkCompressed
     testFam2Ind
     testInd2Fam
 
@@ -117,9 +118,24 @@ testWritePlink = describe "writePlink" $ do
             testDatSnpProd = each mockDatEigenstratSnp
             testDatGenoProd = each mockDatPlinkBed
             testDatJointProd = P.zip testDatSnpProd testDatGenoProd
-        liftIO . runSafeT . runEffect $
-            testDatJointProd >-> writePlink tmpGeno tmpSnp tmpInd mockDatPlinkFam
+        runSafeT $ writePlink tmpGeno tmpSnp tmpInd mockDatPlinkFam testDatJointProd
         (indEntries, esProd) <- liftIO . runSafeT $ readPlink tmpGeno tmpSnp tmpInd
+        indEntries `shouldBe` mockDatPlinkFam
+        snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
+        (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp
+        (map snd snpGenoEntries) `shouldBe` mockDatPlinkBed
+
+testWritePlinkCompressed :: Spec
+testWritePlinkCompressed = describe "writePlink with gzip" $ do
+    it "should write and read back Plink data correctly" $ do
+        let tmpBed = "/tmp/plinkWriteTestGzip.bed.gz"
+            tmpBim = "/tmp/plinkWriteTestGzip.bim.gz"
+            tmpFam = "/tmp/plinkWriteTestGzip.fam"
+            testDatSnpProd = each mockDatEigenstratSnp
+            testDatGenoProd = each mockDatPlinkBed
+            testDatJointProd = P.zip testDatSnpProd testDatGenoProd
+        runSafeT $ writePlink tmpBed tmpBim tmpFam mockDatPlinkFam testDatJointProd
+        (indEntries, esProd) <- liftIO . runSafeT $ readPlink tmpBed tmpBim tmpFam
         indEntries `shouldBe` mockDatPlinkFam
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
         (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp

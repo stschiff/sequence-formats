@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
-module SequenceFormats.EigenstratSpec (spec) where
+module SequenceFormats.EigenstratSpec where
 
 import           Control.Foldl              (list, purely)
 import           Control.Monad.IO.Class     (liftIO)
 import           Data.Vector                (fromList)
-import           Pipes                      (each, runEffect, (>->))
+import           Pipes                      (each)
 import qualified Pipes.Prelude              as P
 import           Pipes.Safe                 (runSafeT)
 import           SequenceFormats.Eigenstrat (EigenstratIndEntry (..),
@@ -19,6 +19,7 @@ spec = do
     testReadEigenstrat
     testReadEigenstratCompressed
     testWriteEigenstrat
+    testWriteEigenstratCompressed
 
 mockDatEigenstratSnp :: [EigenstratSnpEntry]
 mockDatEigenstratSnp = [
@@ -82,8 +83,23 @@ testWriteEigenstrat = describe "writeEigenstrat" $ do
             testDatSnpProd = each mockDatEigenstratSnp
             testDatGenoProd = each mockDatEigenstratGeno
             testDatJointProd = P.zip testDatSnpProd testDatGenoProd
-        liftIO . runSafeT . runEffect $
-            testDatJointProd >-> writeEigenstrat tmpGeno tmpSnp tmpInd mockDatEigenstratInd
+        runSafeT $ writeEigenstrat tmpGeno tmpSnp tmpInd mockDatEigenstratInd testDatJointProd
+        (indEntries, esProd) <- liftIO . runSafeT $ readEigenstrat tmpGeno tmpSnp tmpInd
+        indEntries `shouldBe` mockDatEigenstratInd
+        snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
+        (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp
+        (map snd snpGenoEntries) `shouldBe` mockDatEigenstratGeno
+
+testWriteEigenstratCompressed :: Spec
+testWriteEigenstratCompressed = describe "writeEigenstrat with gzip" $ do
+    it "should write and read back eigenstrat data correctly" $ do
+        let tmpGeno = "/tmp/eigenstratWriteTestGzip.geno.gz"
+            tmpSnp = "/tmp/eigenstratWriteTestGzip.snp.gz"
+            tmpInd = "/tmp/eigenstratWriteTestGzip.ind"
+            testDatSnpProd = each mockDatEigenstratSnp
+            testDatGenoProd = each mockDatEigenstratGeno
+            testDatJointProd = P.zip testDatSnpProd testDatGenoProd
+        runSafeT $ writeEigenstrat tmpGeno tmpSnp tmpInd mockDatEigenstratInd testDatJointProd
         (indEntries, esProd) <- liftIO . runSafeT $ readEigenstrat tmpGeno tmpSnp tmpInd
         indEntries `shouldBe` mockDatEigenstratInd
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd

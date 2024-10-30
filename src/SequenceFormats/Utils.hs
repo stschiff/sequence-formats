@@ -5,23 +5,25 @@
 module SequenceFormats.Utils (liftParsingErrors,
                               consumeProducer, readFileProd, readFileProdCheckCompress,
                               SeqFormatException(..),
-                              Chrom(..), word) where
+                              Chrom(..), word, gzipConsumer, writeFromPopper, Z.Deflate) where
 
 import           Control.Error                    (readErr)
-import           Control.Exception                (Exception, throw)
+import           Control.Exception                (Exception, throw, throwIO)
 import           Control.Monad.Catch              (MonadThrow, throwM)
+import           Control.Monad.IO.Class           (MonadIO, liftIO)
 import           Control.Monad.Trans.Class        (lift)
 import qualified Data.Attoparsec.ByteString.Char8 as A
 import qualified Data.ByteString.Char8            as B
 import           Data.Char                        (isSpace)
 import           Data.List                        (isSuffixOf)
-import           Pipes                            (Producer, next)
+import qualified Data.Streaming.Zlib              as Z
+import           Pipes                            (Consumer, Producer, next, await)
 import           Pipes.Attoparsec                 (ParsingError (..), parsed)
 import qualified Pipes.ByteString                 as PB
 import           Pipes.GZip                       (decompress)
 import qualified Pipes.Safe                       as PS
 import qualified Pipes.Safe.Prelude               as PS
-import           System.IO                        (IOMode (..))
+import           System.IO                        (Handle, IOMode (..))
 
 -- |An exception type for parsing BioInformatic file formats.
 data SeqFormatException = SeqFormatException String
@@ -75,12 +77,29 @@ consumeProducer :: (MonadThrow m) => A.Parser a -> Producer B.ByteString m () ->
 consumeProducer parser prod = parsed parser prod >>= liftParsingErrors
 
 readFileProd :: (PS.MonadSafe m) => FilePath -> Producer B.ByteString m ()
-readFileProd f = PS.withFile f ReadMode (\h -> PB.fromHandle h)
+readFileProd f = PS.withFile f ReadMode PB.fromHandle
 
 readFileProdCheckCompress :: (PS.MonadSafe m) => FilePath -> Producer B.ByteString m ()
 readFileProdCheckCompress f =
     let decompressFunc = if ".gz" `isSuffixOf` f then decompress else id
-    in  decompressFunc $ PS.withFile f ReadMode (\h -> PB.fromHandle h)
+    in  decompressFunc $ PS.withFile f ReadMode PB.fromHandle
 
 word :: A.Parser B.ByteString
 word = A.takeTill isSpace
+
+gzipConsumer :: (MonadIO m) => Z.Deflate -> Handle -> Consumer B.ByteString m ()
+gzipConsumer def h = do
+    bs <- await
+    pop <- liftIO (Z.feedDeflate def bs)
+    liftIO (writeFromPopper pop h)
+    gzipConsumer def h
+
+writeFromPopper :: (MonadIO m) => Z.Popper -> Handle -> m ()
+writeFromPopper pop h = do
+   popResult <- liftIO pop
+   case popResult of
+      Z.PRDone    -> return ()
+      Z.PRError e -> liftIO $ throwIO e
+      Z.PRNext bs -> do
+         liftIO $ B.hPut h bs
+         writeFromPopper pop h
