@@ -13,27 +13,30 @@ module SequenceFormats.Eigenstrat (EigenstratSnpEntry(..), EigenstratIndEntry(..
 import           SequenceFormats.Utils            (Chrom (..),
                                                    SeqFormatException (..),
                                                    consumeProducer,
+                                                   deflateFinaliser,
+                                                   gzipConsumer,
                                                    readFileProdCheckCompress,
-                                                   word, gzipConsumer, writeFromPopper)
+                                                   word)
 
 import           Control.Applicative              ((<|>))
 import           Control.Exception                (throw)
 import           Control.Monad                    (forM_, void)
 import           Control.Monad.Catch              (MonadThrow)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
+import           Control.Monad.Trans.Class        (lift)
 import qualified Data.Attoparsec.ByteString.Char8 as A
 import qualified Data.ByteString.Char8            as B
 import           Data.List                        (isSuffixOf)
 import qualified Data.Streaming.Zlib              as Z
 import           Data.Vector                      (Vector, fromList, toList)
 import           Pipes                            (Consumer, Pipe, Producer,
-                                                   cat, for, yield, (>->), runEffect)
+                                                   cat, for, yield, (>->))
 import qualified Pipes.ByteString                 as PB
 import qualified Pipes.Prelude                    as P
-import           Pipes.Safe                       (MonadSafe)
+import           Pipes.Safe                       (MonadSafe, register)
 import qualified Pipes.Safe.Prelude               as PS
-import           System.IO                        (Handle, IOMode (..),
-                                                   hPutStrLn, withFile)
+import           System.IO                        (IOMode (..), hPutStrLn,
+                                                   withFile)
 
 -- |A datatype to represent a single genomic SNP. The constructor arguments are:
 -- Chromosome, Position, Reference Allele, Alternative Allele.
@@ -164,31 +167,37 @@ writeEigenstratIndFile f indEntries =
         Unknown -> "U"
 
 -- |Function to write an Eigenstrat Snp File. Returns a consumer expecting EigenstratSnpEntries.
-writeEigenstratSnp :: (MonadIO m) => Maybe Z.Deflate -- ^If Nothing, then no compression
-    -> Handle -- ^The Eigenstrat Snp File Handle.
+writeEigenstratSnp :: (MonadSafe m) => FilePath -- ^The Eigenstrat Snp File.
     -> Consumer EigenstratSnpEntry m () -- ^A consumer to read EigenstratSnpEntries
-writeEigenstratSnp maybeDeflate snpFileH =
-    let snpOutTextConsumer = case maybeDeflate of
-            Nothing -> PB.toHandle snpFileH
-            Just def -> gzipConsumer def snpFileH
-        toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt) ->
+writeEigenstratSnp snpFile = do
+    (_, snpFileH) <- lift $ PS.openFile snpFile WriteMode
+    snpOutTextConsumer <- if ".gz" `isSuffixOf` snpFile then do
+            def <- liftIO $ Z.initDeflate 6 (Z.WindowBits 31)
+            _ <- register (deflateFinaliser def snpFileH)
+            return $ gzipConsumer def snpFileH
+        else
+            return $ PB.toHandle snpFileH
+    let toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt) ->
             let snpLine = B.intercalate "\t" [gid, unChrom chrom, B.pack (show gpos),
                     B.pack (show pos), B.singleton ref, B.singleton alt]
             in  snpLine <> "\n")
-    in  toTextPipe >-> snpOutTextConsumer
+    toTextPipe >-> snpOutTextConsumer
 
 -- |Function to write an Eigentrat Geno File. Returns a consumer expecting Eigenstrat Genolines.
-writeEigenstratGeno :: (MonadIO m) => Maybe Z.Deflate -- ^If Nothing, then no compression
-    -> Handle -- ^The Genotype file handle
+writeEigenstratGeno :: (MonadSafe m) => FilePath -- ^The Genotype file
     -> Consumer GenoLine m () -- ^A consumer to read Genotype entries.
-writeEigenstratGeno maybeDeflate genoFileH =
-    let genoOutTextConsumer = case maybeDeflate of
-            Nothing -> PB.toHandle genoFileH
-            Just def -> gzipConsumer def genoFileH
-        toTextPipe = P.map (\genoLine ->
+writeEigenstratGeno genoFile = do
+    (_, genoFileH) <- lift $ PS.openFile genoFile WriteMode
+    genoOutTextConsumer <- if ".gz" `isSuffixOf` genoFile then do
+            def <- liftIO $ Z.initDeflate 6 (Z.WindowBits 31)
+            _ <- register (deflateFinaliser def genoFileH)
+            return $ gzipConsumer def genoFileH
+        else
+            return $ PB.toHandle genoFileH
+    let toTextPipe = P.map (\genoLine ->
             let genoLineStr = B.concat . map (B.pack . show . toEigenStratNum) . toList $ genoLine
             in  genoLineStr <> "\n")
-    in  toTextPipe >-> genoOutTextConsumer
+    toTextPipe >-> genoOutTextConsumer
   where
     toEigenStratNum c = case c of
         HomRef  -> 2 :: Int
@@ -201,25 +210,10 @@ writeEigenstrat :: (MonadSafe m) => FilePath -- ^The Genotype file
                 -> FilePath -- ^The Snp File
                 -> FilePath -- ^The Ind file
                 -> [EigenstratIndEntry] -- ^The list of individual entries
-                -> Producer (EigenstratSnpEntry, GenoLine) m () -- ^A consumer to read joint Snp/Genotype entries.
-                -> m ()
-writeEigenstrat genoFile snpFile indFile indEntries prod = do
-    snpDeflate  <- if ".gz" `isSuffixOf` snpFile  then fmap Just . liftIO $ Z.initDeflate 6 (Z.WindowBits 31) else return Nothing
-    genoDeflate <- if ".gz" `isSuffixOf` genoFile then fmap Just . liftIO $ Z.initDeflate 6 (Z.WindowBits 31) else return Nothing
+                -> m (Consumer (EigenstratSnpEntry, GenoLine) m ()) -- ^A consumer to read joint Snp/Genotype entries.
+writeEigenstrat genoFile snpFile indFile indEntries = do
     liftIO $ writeEigenstratIndFile indFile indEntries
-    (_, snpFileH)  <- PS.openFile snpFile  WriteMode
-    (_, genoFileH) <- PS.openFile genoFile WriteMode
-    let snpOutConsumer  = writeEigenstratSnp  snpDeflate  snpFileH
-        genoOutConsumer = writeEigenstratGeno genoDeflate genoFileH
-    runEffect $ prod >-> P.tee (P.map fst >-> snpOutConsumer) >-> P.map snd >-> genoOutConsumer
-    case snpDeflate of
-        Nothing -> return ()
-        Just def -> do
-            let finalPop = Z.finishDeflate def
-            writeFromPopper finalPop snpFileH
-    case genoDeflate of
-        Nothing -> return ()
-        Just def -> do
-            let finalPop = Z.finishDeflate def
-            writeFromPopper finalPop genoFileH
-    
+    let snpOutConsumer  = writeEigenstratSnp  snpFile
+        genoOutConsumer = writeEigenstratGeno genoFile
+    return $ P.tee (P.map fst >-> snpOutConsumer) >-> P.map snd >-> genoOutConsumer
+

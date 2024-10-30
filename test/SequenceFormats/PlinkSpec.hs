@@ -16,7 +16,7 @@ import           SequenceFormats.Utils      (Chrom (..))
 import           Control.Foldl              (list, purely)
 import           Control.Monad.IO.Class     (liftIO)
 import           Data.Vector                (fromList)
-import           Pipes                      (each)
+import           Pipes                      (each, runEffect, (>->))
 import qualified Pipes.Prelude              as P
 import           Pipes.Safe                 (runSafeT)
 import           Test.Hspec
@@ -118,7 +118,9 @@ testWritePlink = describe "writePlink" $ do
             testDatSnpProd = each mockDatEigenstratSnp
             testDatGenoProd = each mockDatPlinkBed
             testDatJointProd = P.zip testDatSnpProd testDatGenoProd
-        runSafeT $ writePlink tmpGeno tmpSnp tmpInd mockDatPlinkFam testDatJointProd
+        runSafeT $ do
+            cons <- writePlink tmpGeno tmpSnp tmpInd mockDatPlinkFam
+            runEffect $ testDatJointProd >-> cons
         (indEntries, esProd) <- liftIO . runSafeT $ readPlink tmpGeno tmpSnp tmpInd
         indEntries `shouldBe` mockDatPlinkFam
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
@@ -134,7 +136,9 @@ testWritePlinkCompressed = describe "writePlink with gzip" $ do
             testDatSnpProd = each mockDatEigenstratSnp
             testDatGenoProd = each mockDatPlinkBed
             testDatJointProd = P.zip testDatSnpProd testDatGenoProd
-        runSafeT $ writePlink tmpBed tmpBim tmpFam mockDatPlinkFam testDatJointProd
+        runSafeT $ do
+            cons <- writePlink tmpBed tmpBim tmpFam mockDatPlinkFam
+            runEffect $ testDatJointProd >-> cons
         (indEntries, esProd) <- liftIO . runSafeT $ readPlink tmpBed tmpBim tmpFam
         indEntries `shouldBe` mockDatPlinkFam
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd

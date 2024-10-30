@@ -4,7 +4,7 @@
 
 module SequenceFormats.Utils (liftParsingErrors,
                               consumeProducer, readFileProd, readFileProdCheckCompress,
-                              SeqFormatException(..),
+                              SeqFormatException(..), deflateFinaliser,
                               Chrom(..), word, gzipConsumer, writeFromPopper, Z.Deflate) where
 
 import           Control.Error                    (readErr)
@@ -17,7 +17,8 @@ import qualified Data.ByteString.Char8            as B
 import           Data.Char                        (isSpace)
 import           Data.List                        (isSuffixOf)
 import qualified Data.Streaming.Zlib              as Z
-import           Pipes                            (Consumer, Producer, next, await)
+import           Pipes                            (Consumer, Producer, await,
+                                                   next)
 import           Pipes.Attoparsec                 (ParsingError (..), parsed)
 import qualified Pipes.ByteString                 as PB
 import           Pipes.GZip                       (decompress)
@@ -103,3 +104,8 @@ writeFromPopper pop h = do
       Z.PRNext bs -> do
          liftIO $ B.hPut h bs
          writeFromPopper pop h
+
+deflateFinaliser :: (MonadIO m) => Z.Deflate -> Handle -> m ()
+deflateFinaliser def h = do
+    let finalPop = liftIO $ Z.finishDeflate def
+    writeFromPopper finalPop h

@@ -4,7 +4,7 @@ module SequenceFormats.EigenstratSpec where
 import           Control.Foldl              (list, purely)
 import           Control.Monad.IO.Class     (liftIO)
 import           Data.Vector                (fromList)
-import           Pipes                      (each)
+import           Pipes                      (each, runEffect, (>->))
 import qualified Pipes.Prelude              as P
 import           Pipes.Safe                 (runSafeT)
 import           SequenceFormats.Eigenstrat (EigenstratIndEntry (..),
@@ -83,7 +83,9 @@ testWriteEigenstrat = describe "writeEigenstrat" $ do
             testDatSnpProd = each mockDatEigenstratSnp
             testDatGenoProd = each mockDatEigenstratGeno
             testDatJointProd = P.zip testDatSnpProd testDatGenoProd
-        runSafeT $ writeEigenstrat tmpGeno tmpSnp tmpInd mockDatEigenstratInd testDatJointProd
+        runSafeT $ do
+            cons <- writeEigenstrat tmpGeno tmpSnp tmpInd mockDatEigenstratInd
+            runEffect $ testDatJointProd >-> cons
         (indEntries, esProd) <- liftIO . runSafeT $ readEigenstrat tmpGeno tmpSnp tmpInd
         indEntries `shouldBe` mockDatEigenstratInd
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
@@ -99,7 +101,9 @@ testWriteEigenstratCompressed = describe "writeEigenstrat with gzip" $ do
             testDatSnpProd = each mockDatEigenstratSnp
             testDatGenoProd = each mockDatEigenstratGeno
             testDatJointProd = P.zip testDatSnpProd testDatGenoProd
-        runSafeT $ writeEigenstrat tmpGeno tmpSnp tmpInd mockDatEigenstratInd testDatJointProd
+        runSafeT $ do
+            cons <- writeEigenstrat tmpGeno tmpSnp tmpInd mockDatEigenstratInd
+            runEffect $ testDatJointProd >-> cons
         (indEntries, esProd) <- liftIO . runSafeT $ readEigenstrat tmpGeno tmpSnp tmpInd
         indEntries `shouldBe` mockDatEigenstratInd
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd

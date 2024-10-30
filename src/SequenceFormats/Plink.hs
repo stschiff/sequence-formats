@@ -17,13 +17,16 @@ import           SequenceFormats.Eigenstrat       (EigenstratIndEntry (..),
                                                    GenoEntry (..), GenoLine,
                                                    Sex (..))
 import           SequenceFormats.Utils            (Chrom (..), consumeProducer,
+                                                   deflateFinaliser,
+                                                   gzipConsumer,
                                                    readFileProdCheckCompress,
-                                                   word, gzipConsumer, writeFromPopper)
+                                                   word, writeFromPopper)
 
 import           Control.Applicative              ((<|>))
 import           Control.Monad                    (forM_, void)
 import           Control.Monad.Catch              (MonadThrow, throwM)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
+import           Control.Monad.Trans.Class        (lift)
 import           Control.Monad.Trans.State.Strict (runStateT)
 import qualified Data.Attoparsec.ByteString       as AB
 import qualified Data.Attoparsec.ByteString.Char8 as A
@@ -34,14 +37,14 @@ import           Data.List                        (intercalate, isSuffixOf)
 import qualified Data.Streaming.Zlib              as Z
 import           Data.Vector                      (fromList, toList)
 import           Data.Word                        (Word8)
-import           Pipes                            (Consumer, Producer, (>->), runEffect)
+import           Pipes                            (Consumer, Producer, (>->))
 import           Pipes.Attoparsec                 (ParsingError (..), parse)
 import qualified Pipes.ByteString                 as PB
 import qualified Pipes.Prelude                    as P
-import           Pipes.Safe                       (MonadSafe)
+import           Pipes.Safe                       (MonadSafe, register)
 import qualified Pipes.Safe.Prelude               as PS
-import           System.IO                        (Handle, IOMode (..),
-                                                   hPutStrLn, withFile)
+import           System.IO                        (IOMode (..), hPutStrLn,
+                                                   withFile)
 
 -- see https://www.cog-genomics.org/plink/2.0/formats#fam
 data PlinkFamEntry = PlinkFamEntry {
@@ -168,18 +171,21 @@ readPlink bedFile bimFile famFile = do
     return (indEntries, P.zip snpProd genoProd)
 
 -- |Function to write a Bim file. Returns a consumer expecting EigenstratSnpEntries.
-writeBim :: (MonadIO m) => Maybe Z.Deflate -- ^If Nothing, then no Compression
-    -> Handle -- ^The Eigenstrat Snp File handle.
+writeBim :: (MonadSafe m) => FilePath -- ^The Plink Bim File.
     -> Consumer EigenstratSnpEntry m () -- ^A consumer to read EigenstratSnpEntries
-writeBim maybeDeflate snpFileH =
-    let snpOutTextConsumer = case maybeDeflate of
-            Nothing -> PB.toHandle snpFileH
-            Just def -> gzipConsumer def snpFileH
-        toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt) ->
+writeBim bimFile = do
+    (_, bimFileH) <- lift $ PS.openFile bimFile WriteMode
+    bimOutTextConsumer <- if ".gz" `isSuffixOf` bimFile then do
+            def <- liftIO $ Z.initDeflate 6 (Z.WindowBits 31)
+            _ <- register (deflateFinaliser def bimFileH)
+            return $ gzipConsumer def bimFileH
+        else
+            return $ PB.toHandle bimFileH
+    let toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt) ->
             let bimLine = B.intercalate "\t" [unChrom chrom, gid, B.pack (show gpos),
                     B.pack (show pos), B.singleton ref, B.singleton alt]
             in  bimLine <> "\n")
-    in  toTextPipe >-> snpOutTextConsumer
+    toTextPipe >-> bimOutTextConsumer
 
 -- |Function to write a Plink Fam file.
 writeFam :: (MonadIO m) => FilePath -> [PlinkFamEntry] -> m ()
@@ -193,20 +199,21 @@ writeFam f indEntries =
         Female  -> "2"
         Unknown -> "0"
 
--- |Function to write an Eigentrat Geno File. Returns a consumer expecting Eigenstrat Genolines.
-writeBed :: (MonadIO m) => Maybe Z.Deflate -- ^If Nothing, then no Compression
-  -> Handle -- ^The Bed file handle
+-- |Function to write a Plink Bed File. Returns a consumer expecting Eigenstrat Genolines.
+writeBed :: (MonadSafe m) => FilePath -- ^The Bed file handle
   -> Consumer GenoLine m () -- ^A consumer to read Genotype entries.
-writeBed maybeDeflate bedFileH = do
+writeBed bedFile = do
+    (_, bedFileH) <- lift $ PS.openFile bedFile WriteMode
     let stickyBytes = BB.pack [0b01101100, 0b00011011, 0b00000001]
-    bedOutConsumer <- case maybeDeflate of
-        Nothing  -> do
-            liftIO $ BB.hPut bedFileH stickyBytes
-            return $ PB.toHandle bedFileH
-        Just def -> do
+    bedOutConsumer <- if ".gz" `isSuffixOf` bedFile then do
+            def <- liftIO $ Z.initDeflate 6 (Z.WindowBits 31)
+            _ <- register (deflateFinaliser def bedFileH)
             pop <- liftIO (Z.feedDeflate def stickyBytes)
             liftIO (writeFromPopper pop bedFileH)
             return $ gzipConsumer def bedFileH
+        else do
+            liftIO $ BB.hPut bedFileH stickyBytes
+            return $ PB.toHandle bedFileH
     let toPlinkPipe = P.map (BB.pack . genoLineToBytes)
     toPlinkPipe >-> bedOutConsumer
   where
@@ -233,24 +240,9 @@ writePlink :: (MonadSafe m) => FilePath -- ^The Bed file
                 -> FilePath -- ^The Bim File
                 -> FilePath -- ^The Fam file
                 -> [PlinkFamEntry] -- ^The list of individual entries
-                -> Producer (EigenstratSnpEntry, GenoLine) m () -- ^A consumer to read joint Snp/Genotype entries.
-                -> m ()
-writePlink bedFile bimFile famFile indEntries prod = do
-    bimDeflate <- if ".gz" `isSuffixOf` bimFile then fmap Just . liftIO $ Z.initDeflate 6 (Z.WindowBits 31) else return Nothing
-    bedDeflate <- if ".gz" `isSuffixOf` bedFile then fmap Just . liftIO $ Z.initDeflate 6 (Z.WindowBits 31) else return Nothing
+                -> m (Consumer (EigenstratSnpEntry, GenoLine) m ()) -- ^A consumer to read joint Snp/Genotype entries.
+writePlink bedFile bimFile famFile indEntries = do
     liftIO $ writeFam famFile indEntries
-    (_, bimFileH) <- PS.openFile bimFile WriteMode
-    (_, bedFileH) <- PS.openFile bedFile WriteMode
-    let bimOutConsumer = writeBim bimDeflate bimFileH
-        bedOutConsumer = writeBed bedDeflate bedFileH
-    runEffect $ prod >-> P.tee (P.map fst >-> bimOutConsumer) >-> P.map snd >-> bedOutConsumer
-    case bimDeflate of
-        Nothing -> return ()
-        Just def -> do
-            let finalPop = Z.finishDeflate def
-            writeFromPopper finalPop bimFileH
-    case bedDeflate of
-        Nothing -> return ()
-        Just def -> do
-            let finalPop = Z.finishDeflate def
-            writeFromPopper finalPop bedFileH
+    let bimOutConsumer = writeBim bimFile
+        bedOutConsumer = writeBed bedFile
+    return $ P.tee (P.map fst >-> bimOutConsumer) >-> P.map snd >-> bedOutConsumer
