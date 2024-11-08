@@ -83,9 +83,8 @@ testWriteEigenstrat = describe "writeEigenstrat" $ do
             testDatSnpProd = each mockDatEigenstratSnp
             testDatGenoProd = each mockDatEigenstratGeno
             testDatJointProd = P.zip testDatSnpProd testDatGenoProd
-        runSafeT $ do
-            cons <- writeEigenstrat tmpGeno tmpSnp tmpInd mockDatEigenstratInd
-            runEffect $ testDatJointProd >-> cons
+            cons = writeEigenstrat tmpGeno tmpSnp tmpInd mockDatEigenstratInd
+        runSafeT . runEffect $ testDatJointProd >-> cons
         (indEntries, esProd) <- liftIO . runSafeT $ readEigenstrat tmpGeno tmpSnp tmpInd
         indEntries `shouldBe` mockDatEigenstratInd
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
@@ -101,9 +100,8 @@ testWriteEigenstratCompressed = describe "writeEigenstrat with gzip" $ do
             testDatSnpProd = each mockDatEigenstratSnp
             testDatGenoProd = each mockDatEigenstratGeno
             testDatJointProd = P.zip testDatSnpProd testDatGenoProd
-        runSafeT $ do
-            cons <- writeEigenstrat tmpGeno tmpSnp tmpInd mockDatEigenstratInd
-            runEffect $ testDatJointProd >-> cons
+            cons = writeEigenstrat tmpGeno tmpSnp tmpInd mockDatEigenstratInd
+        runSafeT . runEffect $ testDatJointProd >-> cons
         (indEntries, esProd) <- liftIO . runSafeT $ readEigenstrat tmpGeno tmpSnp tmpInd
         indEntries `shouldBe` mockDatEigenstratInd
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd

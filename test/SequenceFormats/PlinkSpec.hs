@@ -118,9 +118,8 @@ testWritePlink = describe "writePlink" $ do
             testDatSnpProd = each mockDatEigenstratSnp
             testDatGenoProd = each mockDatPlinkBed
             testDatJointProd = P.zip testDatSnpProd testDatGenoProd
-        runSafeT $ do
-            cons <- writePlink tmpGeno tmpSnp tmpInd mockDatPlinkFam
-            runEffect $ testDatJointProd >-> cons
+            cons = writePlink tmpGeno tmpSnp tmpInd mockDatPlinkFam
+        runSafeT . runEffect $ testDatJointProd >-> cons
         (indEntries, esProd) <- liftIO . runSafeT $ readPlink tmpGeno tmpSnp tmpInd
         indEntries `shouldBe` mockDatPlinkFam
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
@@ -136,9 +135,8 @@ testWritePlinkCompressed = describe "writePlink with gzip" $ do
             testDatSnpProd = each mockDatEigenstratSnp
             testDatGenoProd = each mockDatPlinkBed
             testDatJointProd = P.zip testDatSnpProd testDatGenoProd
-        runSafeT $ do
-            cons <- writePlink tmpBed tmpBim tmpFam mockDatPlinkFam
-            runEffect $ testDatJointProd >-> cons
+            cons = writePlink tmpBed tmpBim tmpFam mockDatPlinkFam
+        runSafeT . runEffect $ testDatJointProd >-> cons
         (indEntries, esProd) <- liftIO . runSafeT $ readPlink tmpBed tmpBim tmpFam
         indEntries `shouldBe` mockDatPlinkFam
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
