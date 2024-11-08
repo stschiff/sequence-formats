@@ -1,5 +1,6 @@
 # Changelog
 
+- V 1.10.0.0: Brought gzip-writing support for Eigenstrat and Plink files back to non-breaking API in `writeEigenstrat` and `writePlink`. Client code can safely update from 1.8.X to 1.10.0.0.
 - V 1.9.0.0: Added gzip-writing support for Eigenstrat and Plink files. This required a breaking change in `writeEigenstrat` and `writePlink`.
 - V 1.8.1.0: Added gzip-support (read-only for now) for Plink (bed and bim files) and VCF.
 - V 1.8.0.1: Allow reading arbitrary letters as reference base in Pileup format. Before only ACTG, N and M were allowed.
