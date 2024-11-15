@@ -2,14 +2,16 @@
 module SequenceFormats.VCFSpec (spec) where
 
 import           Control.Foldl           (list, purely)
-import           Pipes.Prelude           (fold)
+import           Pipes                   (each, runEffect, (>->))
+import qualified Pipes.Prelude           as P
 import           Pipes.Safe              (runSafeT)
 import           SequenceFormats.FreqSum (FreqSumEntry (..))
 import           SequenceFormats.Utils   (Chrom (..), SeqFormatException (..))
 import           SequenceFormats.VCF     (VCFentry (..), VCFheader (..),
                                           getDosages, getGenotypes,
                                           isBiallelicSnp, isTransversionSnp,
-                                          readVCFfromFile, vcfToFreqSumEntry)
+                                          readVCFfromFile, vcfToFreqSumEntry,
+                                          writeVCFfile)
 import           Test.Hspec
 
 spec :: Spec
@@ -21,12 +23,13 @@ spec = do
     testIsTransversionSnp
     testVcfToFreqsumEntry
     testIsBiallelicSnp
+    testWriteVCF
 
 testReadVCFfromFile :: Spec
 testReadVCFfromFile = describe "readVCFfromFile" $ do
     (vcfH, vcfRows) <- runIO . runSafeT $ do
         (vcfH_, vcfProd_) <- readVCFfromFile "testDat/example.vcf"
-        vcfRows_ <- purely fold list vcfProd_
+        vcfRows_ <- purely P.fold list vcfProd_
         return (vcfH_, vcfRows_)
     let vcfHc = vcfHeaderComments vcfH
     it "reads the correct header lines" $ do
@@ -42,7 +45,7 @@ testReadVCFfromFileCompressed :: Spec
 testReadVCFfromFileCompressed = describe "readVCFfromFile with gzip" $ do
     (vcfH, vcfRows) <- runIO . runSafeT $ do
         (vcfH_, vcfProd_) <- readVCFfromFile "testDat/example.vcf.gz"
-        vcfRows_ <- purely fold list vcfProd_
+        vcfRows_ <- purely P.fold list vcfProd_
         return (vcfH_, vcfRows_)
     let vcfHc = vcfHeaderComments vcfH
     it "reads the correct header lines" $ do
@@ -102,3 +105,47 @@ testIsBiallelicSnp = describe "isBiallelicSnp" $ do
         isBiallelicSnp "A" ["C", "T"] `shouldBe` False
     it "should accept biallelic" $
         isBiallelicSnp "A" ["T"] `shouldBe` True
+
+vcfHeader :: VCFheader
+vcfHeader =
+    let commentLines = [
+            "##fileformat=VCFv4.2",
+            "##FILTER=<ID=PASS,Description=\"All filters passed\">",
+            "##samtoolsVersion=1.3+htslib-1.3",
+            "##samtoolsCommand=samtools mpileup -vI -f /projects1/Reference_Genomes/Human/hs37d5/hs37d5.fa -r 1:1-200000 12880A.bam 12881A.bam 12883A.bam 12884A.bam 12885A.bam",
+            "##reference=file:///projects1/Reference_Genomes/Human/hs37d5/hs37d5.fa",
+            "##contig=<ID=1,length=249250621>",
+            "##contig=<ID=2,length=243199373>",
+            "##contig=<ID=3,length=198022430>",
+            "##contig=<ID=4,length=191154276>",
+            "##contig=<ID=5,length=180915260>",
+            "##contig=<ID=hs37d5,length=35477943>",
+            "##ALT=<ID=*,Description=\"Represents allele(s) other than observed.\">",
+            "##INFO=<ID=INDEL,Number=0,Type=Flag,Description=\"Indicates that the variant is an INDEL.\">",
+            "##FORMAT=<ID=PL,Number=G,Type=Integer,Description=\"List of Phred-scaled genotype likelihoods\">",
+            "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+            "##INFO=<ID=AF1,Number=1,Type=Float,Description=\"Max-likelihood estimate of the first ALT allele frequency (assuming HWE)\">",
+            "##INFO=<ID=DP4,Number=4,Type=Integer,Description=\"Number of high-quality ref-forward , ref-reverse, alt-forward and alt-reverse bases\">",
+            "##bcftools_callVersion=1.3+htslib-1.3",
+            "##bcftools_callCommand=call -c -v"]
+        sampleNames = ["12880A", "12881A", "12883A", "12884A", "12885A"]
+    in  VCFheader commentLines sampleNames
+
+testWriteVCF :: Spec
+testWriteVCF = describe "writeVCF" $ do
+    let tmpVCF = "/tmp/vcfWriteTest.vcf"
+        testDatVCFprod = each [vcf1, vcf7]
+        cons = writeVCFfile tmpVCF vcfHeader
+    runIO . runSafeT . runEffect $ testDatVCFprod >-> cons
+    (vcfH, vcfRows) <- runIO . runSafeT $ do
+        (vcfH_, vcfProd_) <- readVCFfromFile tmpVCF
+        vcfRows_ <- purely P.fold list vcfProd_
+        return (vcfH_, vcfRows_)
+    it "correctly write and reads back VCF data" $ do
+        let vcfHc = vcfHeaderComments vcfH
+        vcfHc !! 0 `shouldBe` "##fileformat=VCFv4.2"
+        vcfHc !! 18 `shouldBe` "##bcftools_callCommand=call -c -v"
+        vcfSampleNames vcfH `shouldBe` ["12880A", "12881A", "12883A", "12884A", "12885A"]
+        vcfRows !! 0 `shouldBe` vcf1
+        vcfRows !! 1 `shouldBe` vcf7
+

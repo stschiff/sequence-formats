@@ -12,35 +12,46 @@ module SequenceFormats.VCF (VCFheader(..),
                      getDosages,
                      isTransversionSnp,
                      vcfToFreqSumEntry,
-                     isBiallelicSnp) where
+                     isBiallelicSnp,
+                     printVCFtoStdOut,
+                     writeVCFfile) where
 
 import           SequenceFormats.FreqSum          (FreqSumEntry (..))
 import           SequenceFormats.Utils            (Chrom (..),
                                                    SeqFormatException (..),
                                                    consumeProducer,
                                                    readFileProdCheckCompress,
-                                                   word)
+                                                   word, deflateFinaliser,
+                                                   writeFromPopper,
+                                                   gzipConsumer)
 
 import           Control.Applicative              ((<|>))
-import           Control.Error                    (headErr, atErr)
-import           Control.Monad                    (void, forM, unless)
+import           Control.Error                    (atErr, headErr)
+import           Control.Monad                    (forM, unless, void)
 import           Control.Monad.Catch              (MonadThrow, throwM)
-import           Control.Monad.IO.Class           (MonadIO)
+import           Control.Monad.IO.Class           (MonadIO, liftIO)
+import Control.Monad.Trans.Class (lift)
 import           Control.Monad.Trans.State.Strict (runStateT)
 import qualified Data.Attoparsec.ByteString.Char8 as A
 import qualified Data.ByteString.Char8            as B
 import           Data.Char                        (isSpace)
-import           Pipes                            (Producer)
+import Data.List (isSuffixOf)
+import           Data.Maybe                       (fromMaybe)
+import qualified Data.Streaming.Zlib              as Z
+import           Pipes                            (Consumer, Producer, (>->))
 import           Pipes.Attoparsec                 (parse)
 import qualified Pipes.ByteString                 as PB
-import           Pipes.Safe                       (MonadSafe)
+import qualified Pipes.Prelude                    as P
+import           Pipes.Safe                       (MonadSafe, register)
+import qualified          Pipes.Safe.Prelude as PS
+import           System.IO                        (IOMode (..))
 
 -- |A datatype to represent the VCF Header. Most comments are simply parsed as entire lines, but the very last comment line, containing the sample names, is separated out
 data VCFheader = VCFheader {
     vcfHeaderComments :: [String], -- ^A list of containing all comments starting with a single '#'
     vcfSampleNames    :: [String] -- ^The list of sample names parsed from the last comment line
                              -- starting with '##'
-} deriving (Show)
+} deriving (Show, Eq)
 
 -- |A Datatype representing a single VCF entry.
 data VCFentry = VCFentry {
@@ -140,11 +151,11 @@ getGenotypes vcfEntry = do
     let gtIndexTry = fmap fst . headErr "GT format field not found" . filter ((=="GT") . snd) .
                zip [0..] . vcfFormatString $ vcfEntry
     gtIndex <- case gtIndexTry of
-        Left e -> throwM . SeqFormatException $ e
+        Left e  -> throwM . SeqFormatException $ e
         Right i -> return i
-    forM (vcfGenotypeInfo vcfEntry) $ \indInfo -> 
+    forM (vcfGenotypeInfo vcfEntry) $ \indInfo ->
         case atErr ("cannot find genotype from " ++ show indInfo) indInfo gtIndex of
-            Left e -> throwM . SeqFormatException $ e
+            Left e  -> throwM . SeqFormatException $ e
             Right g -> return g
 
 -- |Extracts the dosages (the sum of non-reference alleles) per sample (returns a Left Error if it fails.)
@@ -158,7 +169,7 @@ getDosages vcfEntry = do
             ["0", "1"] -> return $ Just 1
             ["1", "0"] -> return $ Just 1
             ["1", "1"] -> return $ Just 2
-            _ -> return Nothing
+            _          -> return Nothing
 
 -- |Converts a VCFentry to the simpler FreqSum format (returns a Left Error if it fails.)
 vcfToFreqSumEntry :: (MonadThrow m) => VCFentry -> m FreqSumEntry
@@ -173,3 +184,41 @@ vcfToFreqSumEntry vcfEntry = do
     unless (alt `elem` ['A', 'C', 'T', 'G', '.']) . throwM $ SeqFormatException "Invalid Alternative Allele"
     return $ FreqSumEntry (vcfChrom vcfEntry) (vcfPos vcfEntry) (vcfId vcfEntry) Nothing ref alt dosages
 
+printVCFtoStdOut :: (MonadIO m) => VCFheader -> Consumer VCFentry m ()
+printVCFtoStdOut vcfh = do
+    liftIO . B.putStr . vcfHeaderToText $ vcfh
+    P.map vcfEntryToText >-> PB.stdout
+
+vcfHeaderToText :: VCFheader -> B.ByteString
+vcfHeaderToText (VCFheader comments names) =
+    let commentsBlock = B.intercalate "\n" . map B.pack $ comments
+        namesLine = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t" <> (B.intercalate "\t" . map B.pack $ names)
+    in  commentsBlock <> "\n" <> namesLine <> "\n"
+
+vcfEntryToText :: VCFentry -> B.ByteString
+vcfEntryToText e =
+    (<> "\n") . B.intercalate "\t" $ [
+        unChrom . vcfChrom $ e,
+        B.pack . show . vcfPos $ e,
+        fromMaybe "." . vcfId $ e,
+        vcfRef e,
+        if null (vcfAlt e) then "." else B.intercalate "," . vcfAlt $ e,
+        maybe "." (B.pack . show) . vcfQual $ e,
+        fromMaybe "." . vcfFilter $ e,
+        if null (vcfInfo e) then "." else B.intercalate ";" . vcfInfo $ e,
+        B.intercalate ":" . vcfFormatString $ e,
+        B.intercalate "\t" . map (B.intercalate ":") . vcfGenotypeInfo $ e]
+
+writeVCFfile :: (MonadSafe m) => FilePath -> VCFheader -> Consumer VCFentry m ()
+writeVCFfile vcfFile vcfh = do
+    (_, vcfFileH) <- lift $ PS.openFile vcfFile WriteMode
+    vcfOutConsumer <- if ".gz" `isSuffixOf` vcfFile then do
+            def <- liftIO $ Z.initDeflate 6 (Z.WindowBits 31)
+            _ <- register (deflateFinaliser def vcfFileH)
+            pop <- liftIO (Z.feedDeflate def (vcfHeaderToText vcfh))
+            liftIO (writeFromPopper pop vcfFileH)
+            return $ gzipConsumer def vcfFileH
+        else do
+            liftIO $ B.hPut vcfFileH (vcfHeaderToText vcfh)
+            return $ PB.toHandle vcfFileH
+    P.map vcfEntryToText >-> vcfOutConsumer
