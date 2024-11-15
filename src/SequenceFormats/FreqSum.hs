@@ -46,7 +46,7 @@ data FreqSumEntry = FreqSumEntry {
     fsGeneticPos :: Maybe Double, -- ^An optional parameter to take the genetic pos. This is not parsed from or printed to freqSum format but is used in internal conversions from Eigenstrat.
     fsRef        :: Char, -- ^The reference allele
     fsAlt        :: Char, -- ^The alternative allele
-    fsCounts     :: [Maybe Int] -- ^A list of allele counts in each group. Nothing denotes missing data.
+    fsCounts     :: [Maybe (Int, Int)] -- ^A list of tuples with non-reference allele counts in each group and the total allele count. Nothing denotes missing data.
 } deriving (Eq, Show)
 
 -- |This function converts a single freqSum entry to a printable freqSum line.
@@ -54,9 +54,7 @@ freqSumEntryToText :: FreqSumEntry -> B.ByteString
 freqSumEntryToText (FreqSumEntry chrom pos _ _ ref alt maybeCounts) =
     B.intercalate "\t" [unChrom chrom, B.pack (show pos), B.singleton ref, B.singleton alt, countStr] <> "\n"
   where
-    countStr = B.intercalate "\t" . map (B.pack . show . convertToNum) $ maybeCounts
-    convertToNum Nothing  = -1
-    convertToNum (Just a) = a
+    countStr = B.intercalate "\t" . map (B.pack . show . maybe (-1) fst) $ maybeCounts
 
 readFreqSumProd :: (MonadThrow m) =>
     Producer B.ByteString m () -> m (FreqSumHeader, Producer FreqSumEntry m ())
@@ -66,7 +64,7 @@ readFreqSumProd prod = do
         Nothing        -> throwM $ ParsingError [] "freqSum file exhausted"
         Just (Left e)  -> throwM e
         Just (Right h) -> return h
-    return (header, consumeProducer parseFreqSumEntry rest)
+    return (header, consumeProducer (parseFreqSumEntry (fshCounts header)) rest)
 
 -- |A function to read a freqsum file from StdIn. Returns a pair of a freqSum Header and a Producer over all lines.
 readFreqSumStdIn :: (MonadIO m, MonadThrow m) => m (FreqSumHeader, Producer FreqSumEntry m ())
@@ -85,11 +83,13 @@ parseFreqSumHeader = do
   where
     tuple = (,) <$> A.takeWhile (\c -> isAlphaNum c || c == '_' || c == '-') <* A.char '(' <*> A.decimal <* A.char ')'
 
-parseFreqSumEntry :: A.Parser FreqSumEntry
-parseFreqSumEntry = FreqSumEntry <$> (Chrom <$> A.takeTill isSpace) <* A.skipSpace <*> A.decimal <*
+parseFreqSumEntry :: [Int] -> A.Parser FreqSumEntry
+parseFreqSumEntry denom = FreqSumEntry <$> (Chrom <$> A.takeTill isSpace) <* A.skipSpace <*> A.decimal <*
     A.skipSpace <*> pure Nothing <*> pure Nothing <*> base <* A.skipSpace <*> baseOrDot <* A.skipSpace <*> counts <* A.endOfLine
   where
-    counts = (parseMissing <|> parseCount) `A.sepBy` A.char '\t'
+    counts = do
+        rawCounts <- (parseMissing <|> parseCount) `A.sepBy` A.char '\t'
+        return $ map (\(c, d) -> fmap (\n -> (n, d)) c) (zip rawCounts denom)
     parseMissing = A.string "-1" *> pure Nothing
     parseCount = Just <$> A.decimal
     base = A.satisfy (A.inClass "ACTGN")

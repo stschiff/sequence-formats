@@ -49,11 +49,11 @@ mockDatFsHeader = FreqSumHeader names numbers
 
 mockDatFsEntries :: [FreqSumEntry]
 mockDatFsEntries = [
-    FreqSumEntry (Chrom "11") 0      Nothing Nothing 'A' 'C' [Just 1, Just 1,  Just 1, Just 1,  Just 1],
-    FreqSumEntry (Chrom "11") 100000 Nothing Nothing 'A' 'G' [Just 2, Just 1,  Just 0, Just 0,  Just 0],
-    FreqSumEntry (Chrom "11") 200000 Nothing Nothing 'A' 'T' [Just 0, Just 1,  Just 1, Just 1,  Just 1],
-    FreqSumEntry (Chrom "11") 300000 Nothing Nothing 'C' 'A' [Just 2, Nothing, Just 1, Just 0,  Just 0],
-    FreqSumEntry (Chrom "11") 400000 Nothing Nothing 'G' 'A' [Just 0, Just 1,  Just 1, Just 1,  Just 1],
-    FreqSumEntry (Chrom "11") 500000 Nothing Nothing 'T' 'A' [Just 2, Just 2,  Just 1, Nothing, Just 1],
-    FreqSumEntry (Chrom "11") 600000 Nothing Nothing 'G' 'T' [Just 0, Just 0,  Just 1, Nothing, Nothing]]
+    FreqSumEntry (Chrom "11") 0      Nothing Nothing 'A' 'C' [Just (1, 2), Just (1, 2),  Just (1, 2), Just (1, 1),  Just (1, 1)],
+    FreqSumEntry (Chrom "11") 100000 Nothing Nothing 'A' 'G' [Just (2, 2), Just (1, 2),  Just (0, 2), Just (0, 1),  Just (0, 1)],
+    FreqSumEntry (Chrom "11") 200000 Nothing Nothing 'A' 'T' [Just (0, 2), Just (1, 2),  Just (1, 2), Just (1, 1),  Just (1, 1)],
+    FreqSumEntry (Chrom "11") 300000 Nothing Nothing 'C' 'A' [Just (2, 2), Nothing, Just (1, 2), Just (0, 1),  Just (0, 1)],
+    FreqSumEntry (Chrom "11") 400000 Nothing Nothing 'G' 'A' [Just (0, 2), Just (1, 2),  Just (1, 2), Just (1, 1),  Just (1, 1)],
+    FreqSumEntry (Chrom "11") 500000 Nothing Nothing 'T' 'A' [Just (2, 2), Just (2, 2),  Just (1, 2), Nothing, Just (1, 1)],
+    FreqSumEntry (Chrom "11") 600000 Nothing Nothing 'G' 'T' [Just (0, 2), Just (0, 2),  Just (1, 2), Nothing, Nothing]]
 

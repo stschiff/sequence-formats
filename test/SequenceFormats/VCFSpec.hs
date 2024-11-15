@@ -76,11 +76,11 @@ testGetGenotypes = describe "getGenotypes" $ do
 testGetDosages :: Spec
 testGetDosages = describe "getDosages" $ do
     it "should read correct dosages" $ do
-        getDosages vcf1 `shouldReturn` [Just 0, Just 0, Just 1, Just 0, Just 0]
+        getDosages vcf1 `shouldReturn` [Just (0, 2), Just (0, 2), Just (1, 2), Just (0, 2), Just (0, 2)]
         let vcf1' = vcf1 {vcfGenotypeInfo=[
-                ["0/0", "0,3,37"], ["0/0", "0,6,67"], [".", "51,0,28"], ["0/0", "0,54,255"],
+                ["0/0", "0,3,37"], ["0/0", "0,6,67"], [".", "51,0,28"], ["1", "0,54,255"],
                 ["0/0", "0,9,83"]]}
-        getDosages vcf1' `shouldReturn` [Just 0, Just 0, Nothing, Just 0, Just 0]
+        getDosages vcf1' `shouldReturn` [Just (0, 2), Just (0, 2), Nothing, Just (1, 1), Just (0, 2)]
 
 testIsTransversionSnp :: Spec
 testIsTransversionSnp = describe "isTransversionSnp" $ do
@@ -96,7 +96,7 @@ testIsTransversionSnp = describe "isTransversionSnp" $ do
 testVcfToFreqsumEntry :: Spec
 testVcfToFreqsumEntry = describe "vcfToFreqsumEntry" $
     it "should convert correctly" $ do
-        let r = FreqSumEntry (Chrom "1") 10492 (Just "testId") Nothing 'C' 'T' [Just 0, Just 0, Just 1, Just 0, Just 0]
+        let r = FreqSumEntry (Chrom "1") 10492 (Just "testId") Nothing 'C' 'T' [Just (0, 2), Just (0, 2), Just (1, 2), Just (0, 2), Just (0, 2)]
         vcfToFreqSumEntry vcf1 `shouldReturn` r
 
 testIsBiallelicSnp :: Spec

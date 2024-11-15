@@ -158,23 +158,24 @@ getGenotypes vcfEntry = do
             Left e  -> throwM . SeqFormatException $ e
             Right g -> return g
 
--- |Extracts the dosages (the sum of non-reference alleles) per sample (returns a Left Error if it fails.)
-getDosages :: (MonadThrow m) => VCFentry -> m [Maybe Int]
+-- |Extracts the dosages (the sum of non-reference alleles) and ploidies per sample
+getDosages :: (MonadThrow m) => VCFentry -> m [Maybe (Int, Int)]
 getDosages vcfEntry = do
     genotypes <- getGenotypes vcfEntry
     return $ do
         gen <- genotypes
         case B.splitWith (\c -> c == '|' || c == '/') gen of
-            ["0", "0"] -> return $ Just 0
-            ["0", "1"] -> return $ Just 1
-            ["1", "0"] -> return $ Just 1
-            ["1", "1"] -> return $ Just 2
+            ["0"]      -> return $ Just (0, 1)
+            ["1"]      -> return $ Just (1, 1)
+            ["0", "0"] -> return $ Just (0, 2)
+            ["0", "1"] -> return $ Just (1, 2)
+            ["1", "0"] -> return $ Just (1, 2)
+            ["1", "1"] -> return $ Just (2, 2)
             _          -> return Nothing
 
--- |Converts a VCFentry to the simpler FreqSum format (returns a Left Error if it fails.)
+-- |Converts a VCFentry to the simpler FreqSum format
 vcfToFreqSumEntry :: (MonadThrow m) => VCFentry -> m FreqSumEntry
 vcfToFreqSumEntry vcfEntry = do
-    dosages <- getDosages vcfEntry
     unless (B.length (vcfRef vcfEntry) == 1) . throwM $ SeqFormatException "multi-site reference allele"
     unless (length (vcfAlt vcfEntry) == 1) . throwM $ SeqFormatException "need exactly one alternative allele"
     unless (B.length (head . vcfAlt $ vcfEntry) == 1) . throwM $ SeqFormatException "multi-site alternative allele"
@@ -182,6 +183,7 @@ vcfToFreqSumEntry vcfEntry = do
     let alt = B.head . head . vcfAlt $ vcfEntry
     unless (ref `elem` ['A', 'C', 'T', 'G', 'N']) . throwM $ SeqFormatException "Invalid Reference Allele"
     unless (alt `elem` ['A', 'C', 'T', 'G', '.']) . throwM $ SeqFormatException "Invalid Alternative Allele"
+    dosages <- getDosages vcfEntry
     return $ FreqSumEntry (vcfChrom vcfEntry) (vcfPos vcfEntry) (vcfId vcfEntry) Nothing ref alt dosages
 
 printVCFtoStdOut :: (MonadIO m) => VCFheader -> Consumer VCFentry m ()
