@@ -22,8 +22,8 @@ import           SequenceFormats.Utils            (Chrom (..),
                                                    word)
 
 import           Control.Applicative              ((<|>))
-import           Control.Error                    (assertErr, headErr)
-import           Control.Monad                    (void)
+import           Control.Error                    (assertErr, headErr, atErr)
+import           Control.Monad                    (void, forM)
 import           Control.Monad.Catch              (MonadThrow, throwM)
 import           Control.Monad.IO.Class           (MonadIO)
 import           Control.Monad.Trans.State.Strict (runStateT)
@@ -139,7 +139,9 @@ getGenotypes :: VCFentry -> Either String [B.ByteString]
 getGenotypes vcfEntry = do
     gtIndex <- fmap fst . headErr "GT format field not found" . filter ((=="GT") . snd) .
                zip [0..] . vcfFormatString $ vcfEntry
-    return $ map (!!gtIndex) (vcfGenotypeInfo vcfEntry)
+    forM (vcfGenotypeInfo vcfEntry) $ \indInfo -> 
+        atErr ("cannot find genotype from " ++ show indInfo) indInfo gtIndex
+
 
 -- |Extracts the dosages (the sum of non-reference alleles) per sample (returns a Left Error if it fails.)
 getDosages :: VCFentry -> Either String [Maybe Int]
