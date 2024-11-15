@@ -5,7 +5,7 @@ import           Control.Foldl           (list, purely)
 import           Pipes.Prelude           (fold)
 import           Pipes.Safe              (runSafeT)
 import           SequenceFormats.FreqSum (FreqSumEntry (..))
-import           SequenceFormats.Utils   (Chrom (..))
+import           SequenceFormats.Utils   (Chrom (..), SeqFormatException (..))
 import           SequenceFormats.VCF     (VCFentry (..), VCFheader (..),
                                           getDosages, getGenotypes,
                                           isBiallelicSnp, isTransversionSnp,
@@ -66,18 +66,18 @@ vcf7 = VCFentry (Chrom "2") 30923 Nothing "G" [] Nothing Nothing ["DP=5", "FQ=-2
 testGetGenotypes :: Spec
 testGetGenotypes = describe "getGenotypes" $ do
     it "should successfully read genotypes if GT format field is there" $
-        getGenotypes vcf1 `shouldBe` Right ["0/0", "0/0", "0/1", "0/0", "0/0"]
+        getGenotypes vcf1 `shouldReturn` ["0/0", "0/0", "0/1", "0/0", "0/0"]
     it "should yield Left err if GT format field isn't found" $
-        getGenotypes (vcf1 {vcfFormatString=["PL"]}) `shouldBe` Left "GT format field not found"
+        getGenotypes (vcf1 {vcfFormatString=["PL"]}) `shouldThrow` (== SeqFormatException "GT format field not found")
 
 testGetDosages :: Spec
 testGetDosages = describe "getDosages" $ do
     it "should read correct dosages" $ do
-        getDosages vcf1 `shouldBe` Right [Just 0, Just 0, Just 1, Just 0, Just 0]
+        getDosages vcf1 `shouldReturn` [Just 0, Just 0, Just 1, Just 0, Just 0]
         let vcf1' = vcf1 {vcfGenotypeInfo=[
                 ["0/0", "0,3,37"], ["0/0", "0,6,67"], [".", "51,0,28"], ["0/0", "0,54,255"],
                 ["0/0", "0,9,83"]]}
-        getDosages vcf1' `shouldBe` Right [Just 0, Just 0, Nothing, Just 0, Just 0]
+        getDosages vcf1' `shouldReturn` [Just 0, Just 0, Nothing, Just 0, Just 0]
 
 testIsTransversionSnp :: Spec
 testIsTransversionSnp = describe "isTransversionSnp" $ do
@@ -93,8 +93,8 @@ testIsTransversionSnp = describe "isTransversionSnp" $ do
 testVcfToFreqsumEntry :: Spec
 testVcfToFreqsumEntry = describe "vcfToFreqsumEntry" $
     it "should convert correctly" $ do
-        let r = Right (FreqSumEntry (Chrom "1") 10492 (Just "testId") Nothing 'C' 'T' [Just 0, Just 0, Just 1, Just 0, Just 0])
-        vcfToFreqSumEntry vcf1 `shouldBe` r
+        let r = FreqSumEntry (Chrom "1") 10492 (Just "testId") Nothing 'C' 'T' [Just 0, Just 0, Just 1, Just 0, Just 0]
+        vcfToFreqSumEntry vcf1 `shouldReturn` r
 
 testIsBiallelicSnp :: Spec
 testIsBiallelicSnp = describe "isBiallelicSnp" $ do

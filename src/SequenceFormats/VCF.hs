@@ -22,8 +22,8 @@ import           SequenceFormats.Utils            (Chrom (..),
                                                    word)
 
 import           Control.Applicative              ((<|>))
-import           Control.Error                    (assertErr, headErr, atErr)
-import           Control.Monad                    (void, forM)
+import           Control.Error                    (headErr, atErr)
+import           Control.Monad                    (void, forM, unless)
 import           Control.Monad.Catch              (MonadThrow, throwM)
 import           Control.Monad.IO.Class           (MonadIO)
 import           Control.Monad.Trans.State.Strict (runStateT)
@@ -135,36 +135,41 @@ isTransversionSnp ref alt =
                        ((r == "C") && (a == "T")) || ((r == "T") && (a == "C"))
 
 -- |Extracts the genotype fields (for each sapmle) from a VCF entry
-getGenotypes :: VCFentry -> Either String [B.ByteString]
+getGenotypes :: (MonadThrow m) => VCFentry -> m [B.ByteString]
 getGenotypes vcfEntry = do
-    gtIndex <- fmap fst . headErr "GT format field not found" . filter ((=="GT") . snd) .
+    let gtIndexTry = fmap fst . headErr "GT format field not found" . filter ((=="GT") . snd) .
                zip [0..] . vcfFormatString $ vcfEntry
+    gtIndex <- case gtIndexTry of
+        Left e -> throwM . SeqFormatException $ e
+        Right i -> return i
     forM (vcfGenotypeInfo vcfEntry) $ \indInfo -> 
-        atErr ("cannot find genotype from " ++ show indInfo) indInfo gtIndex
-
+        case atErr ("cannot find genotype from " ++ show indInfo) indInfo gtIndex of
+            Left e -> throwM . SeqFormatException $ e
+            Right g -> return g
 
 -- |Extracts the dosages (the sum of non-reference alleles) per sample (returns a Left Error if it fails.)
-getDosages :: VCFentry -> Either String [Maybe Int]
+getDosages :: (MonadThrow m) => VCFentry -> m [Maybe Int]
 getDosages vcfEntry = do
     genotypes <- getGenotypes vcfEntry
-    let dosages = do
-            gen <- genotypes
-            if '.' `elem` (B.unpack gen) then
-                return Nothing
-            else
-                return . Just $ B.count '1' gen
-    return dosages
+    return $ do
+        gen <- genotypes
+        case B.splitWith (\c -> c == '|' || c == '/') gen of
+            ["0", "0"] -> return $ Just 0
+            ["0", "1"] -> return $ Just 1
+            ["1", "0"] -> return $ Just 1
+            ["1", "1"] -> return $ Just 2
+            _ -> return Nothing
 
 -- |Converts a VCFentry to the simpler FreqSum format (returns a Left Error if it fails.)
-vcfToFreqSumEntry :: VCFentry -> Either String FreqSumEntry
+vcfToFreqSumEntry :: (MonadThrow m) => VCFentry -> m FreqSumEntry
 vcfToFreqSumEntry vcfEntry = do
     dosages <- getDosages vcfEntry
-    assertErr "multi-site reference allele" $ B.length (vcfRef vcfEntry) == 1
-    assertErr "need exactly one alternative allele" $ length (vcfAlt vcfEntry) == 1
-    assertErr "multi-site alternative allele" $ B.length (head . vcfAlt $ vcfEntry) == 1
+    unless (B.length (vcfRef vcfEntry) == 1) . throwM $ SeqFormatException "multi-site reference allele"
+    unless (length (vcfAlt vcfEntry) == 1) . throwM $ SeqFormatException "need exactly one alternative allele"
+    unless (B.length (head . vcfAlt $ vcfEntry) == 1) . throwM $ SeqFormatException "multi-site alternative allele"
     let ref = B.head (vcfRef vcfEntry)
     let alt = B.head . head . vcfAlt $ vcfEntry
-    assertErr "Invalid Reference Allele" $ ref `elem` ['A', 'C', 'T', 'G', 'N']
-    assertErr "Invalid Alternative Allele" $ alt `elem` ['A', 'C', 'T', 'G', '.']
+    unless (ref `elem` ['A', 'C', 'T', 'G', 'N']) . throwM $ SeqFormatException "Invalid Reference Allele"
+    unless (alt `elem` ['A', 'C', 'T', 'G', '.']) . throwM $ SeqFormatException "Invalid Alternative Allele"
     return $ FreqSumEntry (vcfChrom vcfEntry) (vcfPos vcfEntry) (vcfId vcfEntry) Nothing ref alt dosages
 
