@@ -1,21 +1,27 @@
 {-# LANGUAGE OverloadedStrings #-}
 module SequenceFormats.VCFSpec (spec) where
 
-import           Control.Foldl           (list, purely)
-import           Pipes                   (each, runEffect, (>->))
-import qualified Pipes.Prelude           as P
-import           Pipes.Safe              (runSafeT)
-import           SequenceFormats.FreqSum (FreqSumEntry (..))
-import           SequenceFormats.Utils   (Chrom (..), SeqFormatException (..))
-import           SequenceFormats.VCF     (VCFentry (..), VCFheader (..),
-                                          getDosages, getGenotypes,
-                                          isBiallelicSnp, isTransversionSnp,
-                                          readVCFfromFile, vcfToFreqSumEntry,
-                                          writeVCFfile)
+import           Control.Foldl                    (list, purely)
+import           Data.Attoparsec.ByteString.Char8 (parseOnly)
+import           Pipes                            (each, runEffect, (>->))
+import qualified Pipes.Prelude                    as P
+import           Pipes.Safe                       (runSafeT)
+import           SequenceFormats.FreqSum          (FreqSumEntry (..))
+import           SequenceFormats.Utils            (Chrom (..),
+                                                   SeqFormatException (..))
+import           SequenceFormats.VCF              (VCFentry (..),
+                                                   VCFheader (..), getDosages,
+                                                   vcfHeaderParser,
+                                                   getGenotypes, isBiallelicSnp,
+                                                   isTransversionSnp,
+                                                   readVCFfromFile,
+                                                   vcfToFreqSumEntry,
+                                                   writeVCFfile)
 import           Test.Hspec
 
 spec :: Spec
 spec = do
+    testParseVCFheader
     testReadVCFfromFile
     testReadVCFfromFileCompressed
     testGetGenotypes
@@ -24,6 +30,12 @@ spec = do
     testVcfToFreqsumEntry
     testIsBiallelicSnp
     testWriteVCF
+
+testParseVCFheader :: Spec
+testParseVCFheader = describe "parseVCFheader" $ do
+    let htext = "##blabla1\n##blabla2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+    it "should correctly parse a dummy header" $ 
+        parseOnly vcfHeaderParser htext `shouldBe` Right (VCFheader ["##blabla1", "##blabla2"] [])
 
 testReadVCFfromFile :: Spec
 testReadVCFfromFile = describe "readVCFfromFile" $ do
@@ -58,28 +70,34 @@ testReadVCFfromFileCompressed = describe "readVCFfromFile with gzip" $ do
         vcfRows !! 6 `shouldBe` vcf7
 
 vcf1 :: VCFentry
-vcf1 = VCFentry (Chrom "1") 10492 (Just "testId") "C" ["T"] (Just 15.0302) Nothing ["DP=28", "PV4=1,1,0.30985,1"]
-  ["GT", "PL"] [["0/0", "0,3,37"], ["0/0", "0,6,67"], ["0/1", "51,0,28"], ["0/0", "0,54,255"],
-  ["0/0", "0,9,83"]]
+vcf1 =
+    let gfields = Just (["GT", "PL"], [["0/0", "0,3,37"], ["0/0", "0,6,67"], ["0/1", "51,0,28"], ["0/0", "0,54,255"], ["0/0", "0,9,83"]])
+    in  VCFentry (Chrom "1") 10492 (Just "testId") "C" ["T"] (Just 15.0302) Nothing ["DP=28", "PV4=1,1,0.30985,1"] gfields
+
+vcf1bad :: VCFentry
+vcf1bad =
+    let gfields = Just (["PL"], [["0/0", "0,3,37"], ["0/0", "0,6,67"], ["0/1", "51,0,28"], ["0/0", "0,54,255"], ["0/0", "0,9,83"]])
+    in  VCFentry (Chrom "1") 10492 (Just "testId") "C" ["T"] (Just 15.0302) Nothing ["DP=28", "PV4=1,1,0.30985,1"] gfields
 
 vcf7 :: VCFentry
-vcf7 = VCFentry (Chrom "2") 30923 Nothing "G" [] Nothing Nothing ["DP=5", "FQ=-28.9619"]
-  ["GT", "PL"] [["1/1", "0,0,0"], ["1/1", "0,0,0"], ["1/1", "40,6,0"], ["1/1", "105,9,0"], ["1/1", "0,0,0"]]
+vcf7 =
+    let gfields = Just (["GT", "PL"], [["1/1", "0,0,0"], ["1/1", "0,0,0"], ["1/1", "40,6,0"], ["1/1", "105,9,0"], ["1/1", "0,0,0"]])
+    in  VCFentry (Chrom "2") 30923 Nothing "G" [] Nothing Nothing ["DP=5", "FQ=-28.9619"] gfields
 
 testGetGenotypes :: Spec
 testGetGenotypes = describe "getGenotypes" $ do
     it "should successfully read genotypes if GT format field is there" $
         getGenotypes vcf1 `shouldReturn` ["0/0", "0/0", "0/1", "0/0", "0/0"]
     it "should yield Left err if GT format field isn't found" $
-        getGenotypes (vcf1 {vcfFormatString=["PL"]}) `shouldThrow` (== SeqFormatException "GT format field not found")
+        getGenotypes vcf1bad `shouldThrow` (== SeqFormatException "GT format field not found")
 
 testGetDosages :: Spec
 testGetDosages = describe "getDosages" $ do
     it "should read correct dosages" $ do
         getDosages vcf1 `shouldReturn` [Just (0, 2), Just (0, 2), Just (1, 2), Just (0, 2), Just (0, 2)]
-        let vcf1' = vcf1 {vcfGenotypeInfo=[
+        let vcf1' = vcf1 {vcfGenotypeInfo = Just (["GT", "PL"], [
                 ["0/0", "0,3,37"], ["0/0", "0,6,67"], [".", "51,0,28"], ["1", "0,54,255"],
-                ["0/0", "0,9,83"]]}
+                ["0/0", "0,9,83"]])}
         getDosages vcf1' `shouldReturn` [Just (0, 2), Just (0, 2), Nothing, Just (1, 1), Just (0, 2)]
 
 testIsTransversionSnp :: Spec

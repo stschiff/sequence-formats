@@ -28,7 +28,7 @@ instance Genomic PileupRow where
     genomicPosition (PileupRow c p _ _ _) = (c, p)
 
 instance Genomic VCFentry where
-    genomicPosition (VCFentry c p _ _ _ _ _ _ _ _) = (c, p)
+    genomicPosition (VCFentry c p _ _ _ _ _ _ _) = (c, p)
 
 chromFilter :: (Genomic e) => [Chrom] -> e -> Bool
 chromFilter exclusionList = (`notElem` exclusionList) . genomicChrom

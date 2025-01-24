@@ -6,6 +6,7 @@
 
 module SequenceFormats.VCF (VCFheader(..),
                      VCFentry(..),
+                     vcfHeaderParser,
                      readVCFfromStdIn,
                      readVCFfromFile,
                      getGenotypes,
@@ -20,22 +21,22 @@ import           SequenceFormats.FreqSum          (FreqSumEntry (..))
 import           SequenceFormats.Utils            (Chrom (..),
                                                    SeqFormatException (..),
                                                    consumeProducer,
+                                                   deflateFinaliser,
+                                                   gzipConsumer,
                                                    readFileProdCheckCompress,
-                                                   word, deflateFinaliser,
-                                                   writeFromPopper,
-                                                   gzipConsumer)
+                                                   word, writeFromPopper)
 
 import           Control.Applicative              ((<|>))
-import           Control.Error                    (atErr, headErr)
+import           Control.Error                    (atErr)
 import           Control.Monad                    (forM, unless, void)
 import           Control.Monad.Catch              (MonadThrow, throwM)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
-import Control.Monad.Trans.Class (lift)
+import           Control.Monad.Trans.Class        (lift)
 import           Control.Monad.Trans.State.Strict (runStateT)
 import qualified Data.Attoparsec.ByteString.Char8 as A
 import qualified Data.ByteString.Char8            as B
 import           Data.Char                        (isSpace)
-import Data.List (isSuffixOf)
+import           Data.List                        (isSuffixOf)
 import           Data.Maybe                       (fromMaybe)
 import qualified Data.Streaming.Zlib              as Z
 import           Pipes                            (Consumer, Producer, (>->))
@@ -43,13 +44,13 @@ import           Pipes.Attoparsec                 (parse)
 import qualified Pipes.ByteString                 as PB
 import qualified Pipes.Prelude                    as P
 import           Pipes.Safe                       (MonadSafe, register)
-import qualified          Pipes.Safe.Prelude as PS
+import qualified Pipes.Safe.Prelude               as PS
 import           System.IO                        (IOMode (..))
 
 -- |A datatype to represent the VCF Header. Most comments are simply parsed as entire lines, but the very last comment line, containing the sample names, is separated out
 data VCFheader = VCFheader {
-    vcfHeaderComments :: [String], -- ^A list of containing all comments starting with a single '#'
-    vcfSampleNames    :: [String] -- ^The list of sample names parsed from the last comment line
+    vcfHeaderComments :: [B.ByteString], -- ^A list of containing all comments starting with a single '#'
+    vcfSampleNames    :: [B.ByteString] -- ^The list of sample names parsed from the last comment line
                              -- starting with '##'
 } deriving (Show, Eq)
 
@@ -63,8 +64,7 @@ data VCFentry = VCFentry {
     vcfQual         :: Maybe Double, -- ^The quality value
     vcfFilter       :: Maybe B.ByteString, -- ^The Filter value, if non-missing.
     vcfInfo         :: [B.ByteString], -- ^A list of Info fields
-    vcfFormatString :: [B.ByteString], -- ^A list of format tags
-    vcfGenotypeInfo :: [[B.ByteString]] -- ^A list of format fields for each sample.
+    vcfGenotypeInfo :: Maybe ([B.ByteString], [[B.ByteString]]) -- ^An optional tuple of format tags and genotype format fields for each sample.
 } deriving (Show, Eq)
 
 -- |reads a VCFheader and VCFentries from a text producer.
@@ -73,7 +73,7 @@ readVCFfromProd :: (MonadThrow m) =>
 readVCFfromProd prod = do
     (res, rest) <- runStateT (parse vcfHeaderParser) prod
     header <- case res of
-        Nothing        -> throwM $ SeqFormatException "freqSum file exhausted"
+        Nothing        -> throwM $ SeqFormatException "VCF file exhausted prematurely"
         Just (Left e)  -> throwM (SeqFormatException (show e))
         Just (Right h) -> return h
     return (header, consumeProducer vcfEntryParser rest)
@@ -87,30 +87,29 @@ readVCFfromFile :: (MonadSafe m) => FilePath -> m (VCFheader, Producer VCFentry 
 readVCFfromFile = readVCFfromProd . readFileProdCheckCompress
 
 vcfHeaderParser :: A.Parser VCFheader
-vcfHeaderParser = VCFheader <$> A.many1' doubleCommentLine <*> singleCommentLine
+vcfHeaderParser = VCFheader <$> A.many1' doubleCommentLine <*> (headerLineWithSamples <|> headerLineNoSamples)
   where
     doubleCommentLine = do
         c1 <- A.string "##"
         s_ <- A.takeWhile1 (/='\n')
         A.endOfLine
-        return . B.unpack $ c1 <> s_
-    singleCommentLine = do
-        void $ A.char '#'
-        s_ <- A.takeWhile1 (/='\n')
+        return $ c1 <> s_
+    headerLineWithSamples = do
+        void $ A.string "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT"
+        sampleNames <- word `A.sepBy1'` A.char '\t'
         A.endOfLine
-        let fields = B.splitWith (=='\t') s_
-        return . drop 9 . map B.unpack $ fields
+        return sampleNames
+    headerLineNoSamples = A.string "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n" *> pure []
 
 vcfEntryParser :: A.Parser VCFentry
 vcfEntryParser = vcfEntryParserFull <|> vcfEntryParserTruncated
   where
     vcfEntryParserFull = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
         sp <*> word <* sp <*> parseAlternativeAlleles <* sp <*> parseQual <* sp <*> parseFilter <*
-        sp <*> parseInfoFields <* sp <*> parseFormatStrings <* sp <*> parseGenotypeInfos <*
-        A.endOfLine
+        sp <*> parseInfoFields <* sp <*> parseFormatStringsAndGenotypes <* A.endOfLine
     vcfEntryParserTruncated = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
         sp <*> word <* sp <*> parseAlternativeAlleles <* sp <*> parseQual <* sp <*> parseFilter <*
-        sp <*> parseInfoFields <*> pure [] <*> pure [] <* A.endOfLine
+        sp <*> parseInfoFields <*> pure Nothing <* A.endOfLine
     sp = A.satisfy (\c -> c == ' ' || c == '\t')
     parseId = (parseDot *> pure Nothing) <|> (Just <$> word)
     parseDot = A.char '.'
@@ -120,6 +119,7 @@ vcfEntryParser = vcfEntryParserFull <|> vcfEntryParserTruncated
     parseFilter = (parseDot *> pure Nothing) <|> (Just <$> word)
     parseInfoFields = (parseDot *> pure []) <|> (parseInfoField `A.sepBy1` A.char ';')
     parseInfoField = A.takeTill (\c -> c == ';' || isSpace c)
+    parseFormatStringsAndGenotypes = (\f g -> Just (f, g)) <$> parseFormatStrings <*> parseGenotypeInfos 
     parseFormatStrings = parseFormatString `A.sepBy1` A.char ':'
     parseFormatString = A.takeTill (\c -> c == ':' || isSpace c)
     parseGenotypeInfos = parseGenotype `A.sepBy1` sp
@@ -147,16 +147,17 @@ isTransversionSnp ref alt =
 
 -- |Extracts the genotype fields (for each sapmle) from a VCF entry
 getGenotypes :: (MonadThrow m) => VCFentry -> m [B.ByteString]
-getGenotypes vcfEntry = do
-    let gtIndexTry = fmap fst . headErr "GT format field not found" . filter ((=="GT") . snd) .
-               zip [0..] . vcfFormatString $ vcfEntry
-    gtIndex <- case gtIndexTry of
-        Left e  -> throwM . SeqFormatException $ e
-        Right i -> return i
-    forM (vcfGenotypeInfo vcfEntry) $ \indInfo ->
-        case atErr ("cannot find genotype from " ++ show indInfo) indInfo gtIndex of
-            Left e  -> throwM . SeqFormatException $ e
-            Right g -> return g
+getGenotypes vcfEntry = case vcfGenotypeInfo vcfEntry of
+    Nothing -> throwM $ SeqFormatException "No Genotypes in this VCF"
+    Just (formatField, genotypeFields) -> do
+        gtIndex <- case filter ((=="GT") . snd) . zip [0..] $ formatField of
+            []  -> throwM $ SeqFormatException "GT format field not found"
+            [i] -> return . fst $ i
+            _   -> throwM $ SeqFormatException "Multiple GT fields specified in VCF format field"
+        forM genotypeFields $ \indInfo ->
+            case atErr ("cannot find genotype from " ++ show indInfo) indInfo gtIndex of
+                Left e  -> throwM . SeqFormatException $ e
+                Right g -> return g
 
 -- |Extracts the dosages (the sum of non-reference alleles) and ploidies per sample
 getDosages :: (MonadThrow m) => VCFentry -> m [Maybe (Int, Int)]
@@ -193,23 +194,27 @@ printVCFtoStdOut vcfh = do
 
 vcfHeaderToText :: VCFheader -> B.ByteString
 vcfHeaderToText (VCFheader comments names) =
-    let commentsBlock = B.intercalate "\n" . map B.pack $ comments
-        namesLine = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t" <> (B.intercalate "\t" . map B.pack $ names)
+    let commentsBlock = B.intercalate "\n" comments
+        namesLine = case names of
+            [] -> "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
+            _  -> "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t" <> (B.intercalate "\t" names)
     in  commentsBlock <> "\n" <> namesLine <> "\n"
 
 vcfEntryToText :: VCFentry -> B.ByteString
 vcfEntryToText e =
-    (<> "\n") . B.intercalate "\t" $ [
-        unChrom . vcfChrom $ e,
-        B.pack . show . vcfPos $ e,
-        fromMaybe "." . vcfId $ e,
-        vcfRef e,
-        if null (vcfAlt e) then "." else B.intercalate "," . vcfAlt $ e,
-        maybe "." (B.pack . show) . vcfQual $ e,
-        fromMaybe "." . vcfFilter $ e,
-        if null (vcfInfo e) then "." else B.intercalate ";" . vcfInfo $ e,
-        B.intercalate ":" . vcfFormatString $ e,
-        B.intercalate "\t" . map (B.intercalate ":") . vcfGenotypeInfo $ e]
+    let baseFieldList = [
+            unChrom . vcfChrom     $ e,
+            B.pack . show . vcfPos $ e,
+            fromMaybe "." . vcfId  $ e,
+            vcfRef e,
+            if null (vcfAlt e) then "." else B.intercalate "," . vcfAlt $ e,
+            maybe "." (B.pack . show) . vcfQual $ e,
+            fromMaybe "." . vcfFilter $ e,
+            if null (vcfInfo e) then "." else B.intercalate ";" . vcfInfo $ e]
+        genotypeFieldList = case vcfGenotypeInfo e of
+            Nothing -> []
+            Just (f, gs) -> [B.intercalate ":" f] ++ map (B.intercalate ":") gs
+    in  (<> "\n") . B.intercalate "\t" $ baseFieldList ++ genotypeFieldList
 
 writeVCFfile :: (MonadSafe m) => FilePath -> VCFheader -> Consumer VCFentry m ()
 writeVCFfile vcfFile vcfh = do
