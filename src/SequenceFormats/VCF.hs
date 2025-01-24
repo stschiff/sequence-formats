@@ -35,7 +35,6 @@ import           Control.Monad.Trans.Class        (lift)
 import           Control.Monad.Trans.State.Strict (runStateT)
 import qualified Data.Attoparsec.ByteString.Char8 as A
 import qualified Data.ByteString.Char8            as B
-import           Data.Char                        (isSpace)
 import           Data.List                        (isSuffixOf)
 import           Data.Maybe                       (fromMaybe)
 import qualified Data.Streaming.Zlib              as Z
@@ -95,7 +94,7 @@ vcfHeaderParser = VCFheader <$> A.many1' doubleCommentLine <*> (headerLineWithSa
         A.endOfLine
         return $ c1 <> s_
     headerLineWithSamples = do
-        void $ A.string "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT"
+        void $ A.string "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t"
         sampleNames <- word `A.sepBy1'` A.char '\t'
         A.endOfLine
         return sampleNames
@@ -110,21 +109,21 @@ vcfEntryParser = vcfEntryParserFull <|> vcfEntryParserTruncated
     vcfEntryParserTruncated = VCFentry <$> (Chrom <$> word) <* sp <*> A.decimal <* sp <*> parseId <*
         sp <*> word <* sp <*> parseAlternativeAlleles <* sp <*> parseQual <* sp <*> parseFilter <*
         sp <*> parseInfoFields <*> pure Nothing <* A.endOfLine
-    sp = A.satisfy (\c -> c == ' ' || c == '\t')
+    sp = A.satisfy (\c -> c == '\t')
     parseId = (parseDot *> pure Nothing) <|> (Just <$> word)
     parseDot = A.char '.'
     parseAlternativeAlleles = (parseDot *> pure []) <|> (parseAllele `A.sepBy1` A.char ',')
-    parseAllele = A.takeTill (\c -> c == ',' || isSpace c)
+    parseAllele = A.takeTill (\c -> c == ',' || c == '\t')
     parseQual = (parseDot *> pure Nothing) <|> (Just <$> A.double)
     parseFilter = (parseDot *> pure Nothing) <|> (Just <$> word)
     parseInfoFields = (parseDot *> pure []) <|> (parseInfoField `A.sepBy1` A.char ';')
-    parseInfoField = A.takeTill (\c -> c == ';' || isSpace c)
-    parseFormatStringsAndGenotypes = (\f g -> Just (f, g)) <$> parseFormatStrings <*> parseGenotypeInfos 
+    parseInfoField = A.takeTill (\c -> c == ';' || c == '\t')
+    parseFormatStringsAndGenotypes = (\f g -> Just (f, g)) <$> parseFormatStrings <* sp <*> parseGenotypeInfos 
     parseFormatStrings = parseFormatString `A.sepBy1` A.char ':'
-    parseFormatString = A.takeTill (\c -> c == ':' || isSpace c)
+    parseFormatString = A.takeTill (\c -> c == ':' || c == '\t')
     parseGenotypeInfos = parseGenotype `A.sepBy1` sp
     parseGenotype = parseGenoField `A.sepBy1` A.char ':'
-    parseGenoField = A.takeTill (\c -> c == ':' || isSpace c)
+    parseGenoField = A.takeTill (\c -> c == ':' || c == '\t' || c == '\n')
 
 -- |returns True if the SNP is biallelic.
 isBiallelicSnp :: B.ByteString -> [B.ByteString] -> Bool
