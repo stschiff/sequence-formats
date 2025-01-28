@@ -33,7 +33,7 @@ import qualified Data.Attoparsec.ByteString.Char8 as A
 import           Data.Bits                        (shiftL, shiftR, (.&.), (.|.))
 import qualified Data.ByteString                  as BB
 import qualified Data.ByteString.Char8            as B
-import           Data.List                        (intercalate, isSuffixOf)
+import           Data.List                        (isSuffixOf)
 import qualified Data.Streaming.Zlib              as Z
 import           Data.Vector                      (fromList, toList)
 import           Data.Word                        (Word8)
@@ -43,17 +43,17 @@ import qualified Pipes.ByteString                 as PB
 import qualified Pipes.Prelude                    as P
 import           Pipes.Safe                       (MonadSafe, register)
 import qualified Pipes.Safe.Prelude               as PS
-import           System.IO                        (IOMode (..), hPutStrLn,
+import           System.IO                        (IOMode (..),
                                                    withFile)
 
 -- see https://www.cog-genomics.org/plink/2.0/formats#fam
 data PlinkFamEntry = PlinkFamEntry {
-    _famFamilyID     :: String,
-    _famIndividualID :: String,
-    _famFatherID     :: String,
-    _famMotherID     :: String,
+    _famFamilyID     :: B.ByteString,
+    _famIndividualID :: B.ByteString,
+    _famFatherID     :: B.ByteString,
+    _famMotherID     :: B.ByteString,
     _famSexCode      :: Sex,
-    _famPhenotype    :: String
+    _famPhenotype    :: B.ByteString
 } deriving (Eq, Show)
 
 data PlinkPopNameMode = PlinkPopNameAsFamily | PlinkPopNameAsPhenotype | PlinkPopNameAsBoth deriving (Eq, Show)
@@ -81,12 +81,12 @@ bimParser = do
 famParser :: A.Parser PlinkFamEntry
 famParser = do
     A.skipMany A.space
-    famID    <- B.unpack <$> word
-    indID    <- B.unpack <$> (A.skipMany1 A.space >> word)
-    fatherID <- B.unpack <$> (A.skipMany1 A.space >> word)
-    motherID <- B.unpack <$> (A.skipMany1 A.space >> word)
+    famID    <- word
+    indID    <- A.skipMany1 A.space >> word
+    fatherID <- A.skipMany1 A.space >> word
+    motherID <- A.skipMany1 A.space >> word
     sex      <- A.skipMany1 A.space >> parseSex
-    phen     <- B.unpack <$> (A.skipMany1 A.space >> word)
+    phen     <- A.skipMany1 A.space >> word
     void A.endOfLine
     return $ PlinkFamEntry famID indID fatherID motherID sex phen
   where
@@ -101,7 +101,7 @@ plinkFam2EigenstratInd plinkPopNameMode (PlinkFamEntry famId indId _ _ sex phen)
             PlinkPopNameAsFamily    -> famId
             PlinkPopNameAsPhenotype -> phen
             -- If the two differ but you want both, then merge them somehow.
-            PlinkPopNameAsBoth -> if famId == phen then famId else famId ++ ":" ++ phen
+            PlinkPopNameAsBoth -> if famId == phen then famId else famId <> ":" <> phen
     in  EigenstratIndEntry indId sex popName
 
 eigenstratInd2PlinkFam :: PlinkPopNameMode -> EigenstratIndEntry -> PlinkFamEntry
@@ -192,7 +192,7 @@ writeFam :: (MonadIO m) => FilePath -> [PlinkFamEntry] -> m ()
 writeFam f indEntries =
     liftIO . withFile f WriteMode $ \h ->
         forM_ indEntries $ \(PlinkFamEntry famId indId fatherId motherId sex phen) ->
-            hPutStrLn h . intercalate "\t" $ [famId, indId, fatherId, motherId, sexToStr sex, phen]
+            B.hPutStrLn h . B.intercalate "\t" $ [famId, indId, fatherId, motherId, sexToStr sex, phen]
   where
     sexToStr sex = case sex of
         Male    -> "1"

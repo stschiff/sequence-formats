@@ -35,7 +35,7 @@ import qualified Pipes.ByteString                 as PB
 import qualified Pipes.Prelude                    as P
 import           Pipes.Safe                       (MonadSafe, register)
 import qualified Pipes.Safe.Prelude               as PS
-import           System.IO                        (IOMode (..), hPutStrLn,
+import           System.IO                        (IOMode (..),
                                                    withFile)
 
 -- |A datatype to represent a single genomic SNP. The constructor arguments are:
@@ -52,7 +52,7 @@ data EigenstratSnpEntry = EigenstratSnpEntry
 
 -- |A datatype to represent a single individual. The constructor arguments are:
 -- Name, Sex and Population Name
-data EigenstratIndEntry = EigenstratIndEntry String Sex String
+data EigenstratIndEntry = EigenstratIndEntry B.ByteString Sex B.ByteString
     deriving (Eq, Show)
 
 -- |A datatype to represent Sex in an Eigenstrat Individual file
@@ -91,7 +91,7 @@ eigenstratIndParser = do
     A.skipMany1 A.space
     popName <- word
     void A.endOfLine
-    return $ EigenstratIndEntry (B.unpack name) sex (B.unpack popName)
+    return $ EigenstratIndEntry name sex popName
 
 parseSex :: A.Parser Sex
 parseSex = parseMale <|> parseFemale <|> parseUnknown
@@ -159,7 +159,7 @@ writeEigenstratIndFile :: (MonadIO m) => FilePath -> [EigenstratIndEntry] -> m (
 writeEigenstratIndFile f indEntries =
     liftIO . withFile f WriteMode $ \h ->
         forM_ indEntries $ \(EigenstratIndEntry name sex popName) ->
-            hPutStrLn h $ name <> "\t" <> sexToStr sex <> "\t" <> popName
+            B.hPutStrLn h $ name <> "\t" <> sexToStr sex <> "\t" <> popName
   where
     sexToStr sex = case sex of
         Male    -> "M"
