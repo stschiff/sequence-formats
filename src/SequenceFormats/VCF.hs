@@ -176,13 +176,16 @@ getDosages vcfEntry = do
 -- |Converts a VCFentry to the simpler FreqSum format
 vcfToFreqSumEntry :: (MonadThrow m) => VCFentry -> m FreqSumEntry
 vcfToFreqSumEntry vcfEntry = do
-    unless (B.length (vcfRef vcfEntry) == 1) . throwM $ SeqFormatException "multi-site reference allele"
-    unless (length (vcfAlt vcfEntry) == 1) . throwM $ SeqFormatException "need exactly one alternative allele"
-    unless (B.length (head . vcfAlt $ vcfEntry) == 1) . throwM $ SeqFormatException "multi-site alternative allele"
+    unless (B.length (vcfRef vcfEntry) == 1) . throwM . SeqFormatException $
+        "multi-site reference allele at " ++ show vcfEntry
+    alt <- case vcfAlt vcfEntry of
+        [] -> return 'N'
+        (a:_) -> if B.length a /= 1
+                 then
+                    throwM . SeqFormatException $ "multi-site alternative allele at " ++ show vcfEntry
+                 else
+                    return $ B.head a
     let ref = B.head (vcfRef vcfEntry)
-    let alt = B.head . head . vcfAlt $ vcfEntry
-    unless (ref `elem` ['A', 'C', 'T', 'G', 'N']) . throwM $ SeqFormatException "Invalid Reference Allele"
-    unless (alt `elem` ['A', 'C', 'T', 'G', '.']) . throwM $ SeqFormatException "Invalid Alternative Allele"
     dosages <- getDosages vcfEntry
     return $ FreqSumEntry (vcfChrom vcfEntry) (vcfPos vcfEntry) (vcfId vcfEntry) Nothing ref alt dosages
 

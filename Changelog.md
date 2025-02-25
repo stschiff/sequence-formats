@@ -1,5 +1,6 @@
 # Changelog
 
+- V 1.11.0.1: Allowing missing alternative alleles when converting VCF to FreqSum, and improved error messaging.
 - V 1.11.0.0: Added support for writing of VCF files, including gzipping. Made some breaking API changes on top, for example
   to make the FreqSum data representation safer with respect to Ploidy. Also replaced String types in Eigenstrat and Plink formats to ByteStrings for efficiency. We anyway don't support Unicode with the AttoParsec library.
 - V 1.10.0.0: Brought gzip-writing support for Eigenstrat and Plink files back to non-breaking API in `writeEigenstrat` and `writePlink`. Client code can safely update from 1.8.X to 1.10.0.0.
