@@ -5,7 +5,7 @@
 -}
 
 module SequenceFormats.Eigenstrat (EigenstratSnpEntry(..), EigenstratIndEntry(..),
-    readEigenstratInd, GenoEntry(..), GenoLine, Sex(..),
+    readEigenstratInd, GenoEntry(..), GenoLine, Sex(..), parseSex,
     readEigenstratSnpStdIn, readEigenstratSnpFile,
     readEigenstrat, writeEigenstrat, writeEigenstratIndFile, writeEigenstratSnp,
     writeEigenstratGeno) where
