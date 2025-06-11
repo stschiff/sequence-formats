@@ -1,6 +1,6 @@
 # Changelog
 
-- V 1.11.0.2: exposed parseSex from Utils
+- V 1.11.0.2: exposed parseSex from Eigenstrat
 - V 1.11.0.1: Allowing missing alternative alleles when converting VCF to FreqSum, and improved error messaging.
 - V 1.11.0.0: Added support for writing of VCF files, including gzipping. Made some breaking API changes on top, for example
   to make the FreqSum data representation safer with respect to Ploidy. Also replaced String types in Eigenstrat and Plink formats to ByteStrings for efficiency. We anyway don't support Unicode with the AttoParsec library.
