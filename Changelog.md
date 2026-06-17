@@ -1,5 +1,5 @@
 # Changelog
-
+- V 1.11.0.3: added dots to allowed characters in Plink files
 - V 1.11.0.2: exposed parseSex from Eigenstrat
 - V 1.11.0.1: Allowing missing alternative alleles when converting VCF to FreqSum, and improved error messaging.
 - V 1.11.0.0: Added support for writing of VCF files, including gzipping. Made some breaking API changes on top, for example

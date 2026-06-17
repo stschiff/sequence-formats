@@ -64,19 +64,21 @@ bimParser = do
     snpId_     <- A.skipMany1 A.space >> word
     geneticPos <- A.skipMany1 A.space >> A.double
     pos        <- A.skipMany1 A.space >> A.decimal
-    ref        <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGNX01234")
-    alt        <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGNX01234")
+    ref        <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGNX01234.")
+    alt        <- A.skipMany1 A.space >> A.satisfy (A.inClass "ACTGNX01234.")
     void A.endOfLine
-    let refConvert = convertNum ref
-        altConvert = convertNum alt
+    let refConvert = convertChar ref
+        altConvert = convertChar alt
     return $ EigenstratSnpEntry (Chrom chrom) pos geneticPos snpId_ refConvert altConvert
   where
-    convertNum '0' = 'N'
-    convertNum '1' = 'A'
-    convertNum '2' = 'C'
-    convertNum '3' = 'G'
-    convertNum '4' = 'T'
-    convertNum x   = x
+    convertChar '0' = 'N'
+    convertChar '1' = 'A'
+    convertChar '2' = 'C'
+    convertChar '3' = 'G'
+    convertChar '4' = 'T'
+    convertChar 'X' = 'N'
+    convertChar '.' = 'N'
+    convertChar x   = x
 
 famParser :: A.Parser PlinkFamEntry
 famParser = do
