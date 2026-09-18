@@ -28,7 +28,10 @@ import           System.IO                        (Handle, IOMode (..))
 
 -- |An exception type for parsing BioInformatic file formats.
 data SeqFormatException = SeqFormatException String
-    deriving (Show, Eq)
+    deriving (Eq)
+
+instance Show SeqFormatException where
+    show (SeqFormatException msg) = "SeqFormatException: " ++ msg
 
 instance Exception SeqFormatException
 
@@ -68,7 +71,8 @@ liftParsingErrors res = case res of
         x <- lift $ next restProd
         case x of
             Right (chunk, _) -> do
-                let msg' = "Error while parsing: " <> msg <> ". Error occurred when trying to parse this chunk: " ++ B.unpack chunk
+                let firstLine = B.unpack . B.takeWhile (/= '\n') $ chunk
+                    msg' = "Error while parsing: " <> msg <> ". Offending line: " ++ firstLine
                 throwM $ SeqFormatException msg'
             Left _ -> error "should not happen"
     Right () -> return ()
