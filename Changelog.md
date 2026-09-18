@@ -1,4 +1,5 @@
 # Changelog
+- V 1.11.0.4: improved parsing error messages.
 - V 1.11.0.3: added dots to allowed characters in Plink files
 - V 1.11.0.2: exposed parseSex from Eigenstrat
 - V 1.11.0.1: Allowing missing alternative alleles when converting VCF to FreqSum, and improved error messaging.
@@ -50,23 +51,3 @@
 - V 1.1.5: Fixed VCF parser: Now breaks if lines end prematurely
 - V 1.1.4.2: Exporting readVCFfromProd
 - V 1.1.4.1: First entry in the Changelog. Added Haddock documentation to all modules and prepare for releasing on Hackage.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

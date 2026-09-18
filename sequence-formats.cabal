@@ -1,5 +1,5 @@
 name:                sequence-formats
-version:             1.11.0.3
+version:             1.11.0.4
 synopsis:            A package with basic parsing utilities for several Bioinformatic data formats.
 description:         Contains utilities to parse and write Eigenstrat, Fasta, FreqSum, VCF, Plink and other file formats used in population genetics analyses.
 license:             GPL-3
@@ -32,7 +32,7 @@ extra-source-files:  README.md,
                      testDat/example.snp.gz,
                      testDat/example.vcf,
                      testDat/example.vcf.gz
-                     
+
 library
   exposed-modules:     SequenceFormats.RareAlleleHistogram,
                        SequenceFormats.FreqSum,
