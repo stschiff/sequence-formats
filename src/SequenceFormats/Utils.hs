@@ -68,7 +68,7 @@ liftParsingErrors res = case res of
         x <- lift $ next restProd
         case x of
             Right (chunk, _) -> do
-                let msg' = "Error while parsing: " <> msg <> ". Error occurred when trying to parse this chunk: " ++ show chunk
+                let msg' = "Error while parsing: " <> msg <> ". Error occurred when trying to parse this chunk: " ++ B.unpack chunk
                 throwM $ SeqFormatException msg'
             Left _ -> error "should not happen"
     Right () -> return ()
