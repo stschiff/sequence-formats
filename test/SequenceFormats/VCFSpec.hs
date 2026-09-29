@@ -16,6 +16,7 @@ import           SequenceFormats.VCF              (VCFentry (..),
                                                    isTransversionSnp,
                                                    readVCFfromFile,
                                                    vcfToFreqSumEntry,
+                                                   vcfToFreqSumEntryMaybe,
                                                    writeVCFfile)
 import           Test.Hspec
 
@@ -24,10 +25,12 @@ spec = do
     testParseVCFheader
     testReadVCFfromFile
     testReadVCFfromFileCompressed
+    testReadVCFfromFileMultiMember
     testGetGenotypes
     testGetDosages
     testIsTransversionSnp
     testVcfToFreqsumEntry
+    testVcfToFreqsumEntryMaybe
     testIsBiallelicSnp
     testWriteVCF
 
@@ -66,6 +69,19 @@ testReadVCFfromFileCompressed = describe "readVCFfromFile with gzip" $ do
     it "reads the correct sample names" $
         vcfSampleNames vcfH `shouldBe` ["12880A", "12881A", "12883A", "12884A", "12885A"]
     it "reads the correct vcf genotype rows" $ do
+        vcfRows !! 0 `shouldBe` vcf1
+        vcfRows !! 6 `shouldBe` vcf7
+
+testReadVCFfromFileMultiMember :: Spec
+testReadVCFfromFileMultiMember = describe "readVCFfromFile with multi-member gzip (as in BGZF)" $ do
+    (vcfH, vcfRows) <- runIO . runSafeT $ do
+        (vcfH_, vcfProd_) <- readVCFfromFile "testDat/example.multimember.vcf.gz"
+        vcfRows_ <- purely P.fold list vcfProd_
+        return (vcfH_, vcfRows_)
+    it "reads the correct sample names" $
+        vcfSampleNames vcfH `shouldBe` ["12880A", "12881A", "12883A", "12884A", "12885A"]
+    it "reads all vcf genotype rows" $ do
+        length vcfRows `shouldBe` 7
         vcfRows !! 0 `shouldBe` vcf1
         vcfRows !! 6 `shouldBe` vcf7
 
@@ -116,6 +132,23 @@ testVcfToFreqsumEntry = describe "vcfToFreqsumEntry" $
     it "should convert correctly" $ do
         let r = FreqSumEntry (Chrom "1") 10492 (Just "testId") Nothing 'C' 'T' [Just (0, 2), Just (0, 2), Just (1, 2), Just (0, 2), Just (0, 2)]
         vcfToFreqSumEntry vcf1 `shouldReturn` r
+
+testVcfToFreqsumEntryMaybe :: Spec
+testVcfToFreqsumEntryMaybe = describe "vcfToFreqSumEntryMaybe" $ do
+    it "should convert biallelic SNPs" $ do
+        let r = FreqSumEntry (Chrom "1") 10492 (Just "testId") Nothing 'C' 'T' [Just (0, 2), Just (0, 2), Just (1, 2), Just (0, 2), Just (0, 2)]
+        vcfToFreqSumEntryMaybe vcf1 `shouldReturn` Just r
+    it "should convert sites without alternative allele" $ do
+        r <- vcfToFreqSumEntryMaybe vcf7
+        fmap fsAlt r `shouldBe` Just 'N'
+    it "should skip deletions" $
+        vcfToFreqSumEntryMaybe vcf1 {vcfRef = "CT"} `shouldReturn` Nothing
+    it "should skip insertions" $
+        vcfToFreqSumEntryMaybe vcf1 {vcfAlt = ["CA"]} `shouldReturn` Nothing
+    it "should skip multi-allelic sites" $
+        vcfToFreqSumEntryMaybe vcf1 {vcfAlt = ["T", "G"]} `shouldReturn` Nothing
+    it "should skip spanning deletion alleles" $
+        vcfToFreqSumEntryMaybe vcf1 {vcfAlt = ["*"]} `shouldReturn` Nothing
 
 testIsBiallelicSnp :: Spec
 testIsBiallelicSnp = describe "isBiallelicSnp" $ do

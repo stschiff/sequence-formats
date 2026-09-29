@@ -4,6 +4,7 @@
 
 module SequenceFormats.Utils (liftParsingErrors,
                               consumeProducer, readFileProd, readFileProdCheckCompress,
+                              decompressMultiMember,
                               SeqFormatException(..), deflateFinaliser,
                               Chrom(..), word, gzipConsumer, writeFromPopper, Z.Deflate) where
 
@@ -21,7 +22,7 @@ import           Pipes                            (Consumer, Producer, await,
                                                    next)
 import           Pipes.Attoparsec                 (ParsingError (..), parsed)
 import qualified Pipes.ByteString                 as PB
-import           Pipes.GZip                       (decompress)
+import           Pipes.GZip                       (decompress')
 import qualified Pipes.Safe                       as PS
 import qualified Pipes.Safe.Prelude               as PS
 import           System.IO                        (Handle, IOMode (..))
@@ -86,8 +87,14 @@ readFileProd f = PS.withFile f ReadMode PB.fromHandle
 
 readFileProdCheckCompress :: (PS.MonadSafe m) => FilePath -> Producer B.ByteString m ()
 readFileProdCheckCompress f =
-    let decompressFunc = if ".gz" `isSuffixOf` f then decompress else id
+    let decompressFunc = if ".gz" `isSuffixOf` f then decompressMultiMember else id
     in  decompressFunc $ PS.withFile f ReadMode PB.fromHandle
+
+-- |Decompresses a gzip stream that may consist of multiple concatenated gzip members, as is the
+-- case for BGZF files written by bgzip, bcftools or GATK. Pipes.GZip.decompress on its own stops
+-- after the first member and silently drops the rest of the input.
+decompressMultiMember :: (MonadIO m) => Producer B.ByteString m r -> Producer B.ByteString m r
+decompressMultiMember prod = decompress' prod >>= either decompressMultiMember return
 
 word :: A.Parser B.ByteString
 word = A.takeTill isSpace

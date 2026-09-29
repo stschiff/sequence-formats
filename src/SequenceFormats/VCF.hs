@@ -13,6 +13,7 @@ module SequenceFormats.VCF (VCFheader(..),
                      getDosages,
                      isTransversionSnp,
                      vcfToFreqSumEntry,
+                     vcfToFreqSumEntryMaybe,
                      isBiallelicSnp,
                      printVCFtoStdOut,
                      writeVCFfile) where
@@ -35,6 +36,7 @@ import           Control.Monad.Trans.Class        (lift)
 import           Control.Monad.Trans.State.Strict (runStateT)
 import qualified Data.Attoparsec.ByteString.Char8 as A
 import qualified Data.ByteString.Char8            as B
+import           Data.Char                        (isAlpha)
 import           Data.List                        (isSuffixOf)
 import           Data.Maybe                       (fromMaybe)
 import qualified Data.Streaming.Zlib              as Z
@@ -188,6 +190,21 @@ vcfToFreqSumEntry vcfEntry = do
     let ref = B.head (vcfRef vcfEntry)
     dosages <- getDosages vcfEntry
     return $ FreqSumEntry (vcfChrom vcfEntry) (vcfPos vcfEntry) (vcfId vcfEntry) Nothing ref alt dosages
+
+-- |Like 'vcfToFreqSumEntry', but returns Nothing for sites that cannot be represented as a biallelic SNP,
+-- instead of throwing an exception. These are indels and other multi-base alleles, multi-allelic sites and
+-- non-nucleotide alleles such as the spanning deletion allele @*@. Sites without an alternative allele are kept.
+vcfToFreqSumEntryMaybe :: (MonadThrow m) => VCFentry -> m (Maybe FreqSumEntry)
+vcfToFreqSumEntryMaybe vcfEntry =
+    if isSingleBase (vcfRef vcfEntry) && validAlt (vcfAlt vcfEntry)
+    then Just <$> vcfToFreqSumEntry vcfEntry
+    else return Nothing
+  where
+    isSingleBase a = B.length a == 1 && isAlpha (B.head a)
+    validAlt alts = case alts of
+        []  -> True
+        [a] -> isSingleBase a
+        _   -> False
 
 printVCFtoStdOut :: (MonadIO m) => VCFheader -> Consumer VCFentry m ()
 printVCFtoStdOut vcfh = do

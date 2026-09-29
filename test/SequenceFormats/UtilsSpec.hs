@@ -1,13 +1,20 @@
 {-# LANGUAGE OverloadedStrings #-}
 module SequenceFormats.UtilsSpec (spec) where
 
-import           SequenceFormats.Utils (Chrom (..), SeqFormatException (..))
+import           SequenceFormats.Utils (Chrom (..), SeqFormatException (..),
+                                        decompressMultiMember)
 
 import           Control.Exception     (evaluate)
+import qualified Data.ByteString.Char8 as B
+import           Pipes                 (each, yield)
+import           Pipes.GZip            (compress, defaultCompression)
+import qualified Pipes.Prelude         as P
 import           Test.Hspec
 
 spec :: Spec
-spec = testChrom
+spec = do
+    testChrom
+    testDecompressMultiMember
 
 testChrom :: Spec
 testChrom = describe "Chrom" $ do
@@ -33,3 +40,16 @@ testChrom = describe "Chrom" $ do
         evaluate (Chrom "chrSSS" < Chrom "chrMT") `shouldThrow` (==SeqFormatException "cannot parse chromosome SSS")
 
 
+
+testDecompressMultiMember :: Spec
+testDecompressMultiMember = describe "decompressMultiMember" $ do
+    let gz bs = P.fold (<>) B.empty id (compress defaultCompression (yield bs))
+        expected = "first line\nsecond line\nthird line\n"
+    members <- runIO $ mapM gz ["first line\n", "second line\n", "third line\n"]
+    it "decompresses all members if chunks align with member boundaries" $ do
+        out <- P.fold (<>) B.empty id (decompressMultiMember (each members))
+        out `shouldBe` expected
+    it "decompresses all members if chunks do not align with member boundaries" $ do
+        let (a, b) = B.splitAt 25 (B.concat members)
+        out <- P.fold (<>) B.empty id (decompressMultiMember (each [a, b]))
+        out `shouldBe` expected
