@@ -13,7 +13,6 @@ module SequenceFormats.VCF (VCFheader(..),
                      getDosages,
                      isTransversionSnp,
                      vcfToFreqSumEntry,
-                     vcfToFreqSumEntryMaybe,
                      isBiallelicSnp,
                      printVCFtoStdOut,
                      writeVCFfile) where
@@ -29,7 +28,7 @@ import           SequenceFormats.Utils            (Chrom (..),
 
 import           Control.Applicative              ((<|>))
 import           Control.Error                    (atErr)
-import           Control.Monad                    (forM, unless, void)
+import           Control.Monad                    (forM, void)
 import           Control.Monad.Catch              (MonadThrow, throwM)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
 import           Control.Monad.Trans.Class        (lift)
@@ -175,36 +174,21 @@ getDosages vcfEntry = do
             ["1", "1"] -> return $ Just (2, 2)
             _          -> return Nothing
 
--- |Converts a VCFentry to the simpler FreqSum format
-vcfToFreqSumEntry :: (MonadThrow m) => VCFentry -> m FreqSumEntry
-vcfToFreqSumEntry vcfEntry = do
-    unless (B.length (vcfRef vcfEntry) == 1) . throwM . SeqFormatException $
-        "multi-site reference allele at " ++ show vcfEntry
-    alt <- case vcfAlt vcfEntry of
-        [] -> return 'N'
-        (a:_) -> if B.length a /= 1
-                 then
-                    throwM . SeqFormatException $ "multi-site alternative allele at " ++ show vcfEntry
-                 else
-                    return $ B.head a
-    let ref = B.head (vcfRef vcfEntry)
-    dosages <- getDosages vcfEntry
-    return $ FreqSumEntry (vcfChrom vcfEntry) (vcfPos vcfEntry) (vcfId vcfEntry) Nothing ref alt dosages
-
--- |Like 'vcfToFreqSumEntry', but returns Nothing for sites that cannot be represented as a biallelic SNP,
--- instead of throwing an exception. These are indels and other multi-base alleles, multi-allelic sites and
--- non-nucleotide alleles such as the spanning deletion allele @*@. Sites without an alternative allele are kept.
-vcfToFreqSumEntryMaybe :: (MonadThrow m) => VCFentry -> m (Maybe FreqSumEntry)
-vcfToFreqSumEntryMaybe vcfEntry =
-    if isSingleBase (vcfRef vcfEntry) && validAlt (vcfAlt vcfEntry)
-    then Just <$> vcfToFreqSumEntry vcfEntry
-    else return Nothing
+-- |Converts a VCFentry to the simpler FreqSum format. Returns Nothing for sites that cannot be represented
+-- as a biallelic SNP: indels and other multi-base alleles, multi-allelic sites and non-nucleotide alleles such
+-- as the spanning deletion allele @*@. Sites without an alternative allele are kept, with alternative allele @N@.
+-- Missing SNP IDs are replaced by @Chrom_Pos@.
+vcfToFreqSumEntry :: (MonadThrow m) => VCFentry -> m (Maybe FreqSumEntry)
+vcfToFreqSumEntry vcfEntry = case (vcfRef vcfEntry, vcfAlt vcfEntry) of
+    (ref, [])    | isSingleBase ref                    -> Just <$> makeEntry (B.head ref) 'N'
+    (ref, [alt]) | isSingleBase ref && isSingleBase alt -> Just <$> makeEntry (B.head ref) (B.head alt)
+    _                                                   -> return Nothing
   where
     isSingleBase a = B.length a == 1 && isAlpha (B.head a)
-    validAlt alts = case alts of
-        []  -> True
-        [a] -> isSingleBase a
-        _   -> False
+    chrom = vcfChrom vcfEntry
+    pos = vcfPos vcfEntry
+    snpId_ = fromMaybe (unChrom chrom <> "_" <> B.pack (show pos)) (vcfId vcfEntry)
+    makeEntry ref alt = FreqSumEntry chrom pos (Just snpId_) Nothing ref alt <$> getDosages vcfEntry
 
 printVCFtoStdOut :: (MonadIO m) => VCFheader -> Consumer VCFentry m ()
 printVCFtoStdOut vcfh = do

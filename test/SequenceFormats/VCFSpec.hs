@@ -16,7 +16,6 @@ import           SequenceFormats.VCF              (VCFentry (..),
                                                    isTransversionSnp,
                                                    readVCFfromFile,
                                                    vcfToFreqSumEntry,
-                                                   vcfToFreqSumEntryMaybe,
                                                    writeVCFfile)
 import           Test.Hspec
 
@@ -30,7 +29,6 @@ spec = do
     testGetDosages
     testIsTransversionSnp
     testVcfToFreqsumEntry
-    testVcfToFreqsumEntryMaybe
     testIsBiallelicSnp
     testWriteVCF
 
@@ -128,27 +126,26 @@ testIsTransversionSnp = describe "isTransversionSnp" $ do
         isTransversionSnp "C" ["G"] `shouldBe` True
 
 testVcfToFreqsumEntry :: Spec
-testVcfToFreqsumEntry = describe "vcfToFreqsumEntry" $
-    it "should convert correctly" $ do
-        let r = FreqSumEntry (Chrom "1") 10492 (Just "testId") Nothing 'C' 'T' [Just (0, 2), Just (0, 2), Just (1, 2), Just (0, 2), Just (0, 2)]
-        vcfToFreqSumEntry vcf1 `shouldReturn` r
-
-testVcfToFreqsumEntryMaybe :: Spec
-testVcfToFreqsumEntryMaybe = describe "vcfToFreqSumEntryMaybe" $ do
+testVcfToFreqsumEntry = describe "vcfToFreqSumEntry" $ do
     it "should convert biallelic SNPs" $ do
         let r = FreqSumEntry (Chrom "1") 10492 (Just "testId") Nothing 'C' 'T' [Just (0, 2), Just (0, 2), Just (1, 2), Just (0, 2), Just (0, 2)]
-        vcfToFreqSumEntryMaybe vcf1 `shouldReturn` Just r
+        vcfToFreqSumEntry vcf1 `shouldReturn` Just r
     it "should convert sites without alternative allele" $ do
-        r <- vcfToFreqSumEntryMaybe vcf7
+        r <- vcfToFreqSumEntry vcf7
         fmap fsAlt r `shouldBe` Just 'N'
+    it "should replace missing SNP IDs by Chrom_Pos" $ do
+        r <- vcfToFreqSumEntry vcf7
+        fmap fsSnpId r `shouldBe` Just (Just "2_30923")
     it "should skip deletions" $
-        vcfToFreqSumEntryMaybe vcf1 {vcfRef = "CT"} `shouldReturn` Nothing
+        vcfToFreqSumEntry vcf1 {vcfRef = "CT"} `shouldReturn` Nothing
     it "should skip insertions" $
-        vcfToFreqSumEntryMaybe vcf1 {vcfAlt = ["CA"]} `shouldReturn` Nothing
+        vcfToFreqSumEntry vcf1 {vcfAlt = ["CA"]} `shouldReturn` Nothing
     it "should skip multi-allelic sites" $
-        vcfToFreqSumEntryMaybe vcf1 {vcfAlt = ["T", "G"]} `shouldReturn` Nothing
+        vcfToFreqSumEntry vcf1 {vcfAlt = ["T", "G"]} `shouldReturn` Nothing
     it "should skip spanning deletion alleles" $
-        vcfToFreqSumEntryMaybe vcf1 {vcfAlt = ["*"]} `shouldReturn` Nothing
+        vcfToFreqSumEntry vcf1 {vcfAlt = ["*"]} `shouldReturn` Nothing
+    it "should still throw if genotypes are missing" $
+        vcfToFreqSumEntry vcf1bad `shouldThrow` (== SeqFormatException "GT format field not found")
 
 testIsBiallelicSnp :: Spec
 testIsBiallelicSnp = describe "isBiallelicSnp" $ do
