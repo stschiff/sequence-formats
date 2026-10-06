@@ -177,7 +177,6 @@ getDosages vcfEntry = do
 -- |Converts a VCFentry to the simpler FreqSum format. Returns Nothing for sites that cannot be represented
 -- as a biallelic SNP: indels and other multi-base alleles, multi-allelic sites and non-nucleotide alleles such
 -- as the spanning deletion allele @*@. Sites without an alternative allele are kept, with alternative allele @N@.
--- Missing SNP IDs are replaced by @Chrom_Pos@.
 vcfToFreqSumEntry :: (MonadThrow m) => VCFentry -> m (Maybe FreqSumEntry)
 vcfToFreqSumEntry vcfEntry = case (vcfRef vcfEntry, vcfAlt vcfEntry) of
     (ref, [])    | isSingleBase ref                    -> Just <$> makeEntry (B.head ref) 'N'
@@ -185,10 +184,8 @@ vcfToFreqSumEntry vcfEntry = case (vcfRef vcfEntry, vcfAlt vcfEntry) of
     _                                                   -> return Nothing
   where
     isSingleBase a = B.length a == 1 && isAlpha (B.head a)
-    chrom = vcfChrom vcfEntry
-    pos = vcfPos vcfEntry
-    snpId_ = fromMaybe (unChrom chrom <> "_" <> B.pack (show pos)) (vcfId vcfEntry)
-    makeEntry ref alt = FreqSumEntry chrom pos (Just snpId_) Nothing ref alt <$> getDosages vcfEntry
+    makeEntry ref alt = FreqSumEntry (vcfChrom vcfEntry) (vcfPos vcfEntry) (vcfId vcfEntry) Nothing ref alt <$>
+        getDosages vcfEntry
 
 printVCFtoStdOut :: (MonadIO m) => VCFheader -> Consumer VCFentry m ()
 printVCFtoStdOut vcfh = do

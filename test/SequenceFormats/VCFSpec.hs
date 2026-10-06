@@ -130,12 +130,9 @@ testVcfToFreqsumEntry = describe "vcfToFreqSumEntry" $ do
     it "should convert biallelic SNPs" $ do
         let r = FreqSumEntry (Chrom "1") 10492 (Just "testId") Nothing 'C' 'T' [Just (0, 2), Just (0, 2), Just (1, 2), Just (0, 2), Just (0, 2)]
         vcfToFreqSumEntry vcf1 `shouldReturn` Just r
-    it "should convert sites without alternative allele" $ do
-        r <- vcfToFreqSumEntry vcf7
-        fmap fsAlt r `shouldBe` Just 'N'
-    it "should replace missing SNP IDs by Chrom_Pos" $ do
-        r <- vcfToFreqSumEntry vcf7
-        fmap fsSnpId r `shouldBe` Just (Just "2_30923")
+    it "should convert sites without alternative allele and keep missing SNP IDs as Nothing" $ do
+        let r = FreqSumEntry (Chrom "2") 30923 Nothing Nothing 'G' 'N' [Just (2, 2), Just (2, 2), Just (2, 2), Just (2, 2), Just (2, 2)]
+        vcfToFreqSumEntry vcf7 `shouldReturn` Just r
     it "should skip deletions" $
         vcfToFreqSumEntry vcf1 {vcfRef = "CT"} `shouldReturn` Nothing
     it "should skip insertions" $

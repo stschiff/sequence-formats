@@ -10,11 +10,13 @@ import           SequenceFormats.Plink      (PlinkFamEntry (..),
                                              plinkFam2EigenstratInd,
                                              readBimFile, readFamFile,
                                              readPlink, readPlinkBedFile,
-                                             writePlink)
-import           SequenceFormats.Utils      (Chrom (..))
+                                             writeBim, writePlink)
+import           SequenceFormats.Utils      (Chrom (..),
+                                             SeqFormatException (..))
 
 import           Control.Foldl              (list, purely)
 import           Control.Monad.IO.Class     (liftIO)
+import           Data.List                  (isPrefixOf)
 import           Data.Vector                (fromList)
 import           Pipes                      (each, runEffect, (>->))
 import qualified Pipes.Prelude              as P
@@ -30,6 +32,7 @@ spec = do
     testReadBedFileCompressed
     testReadPlink
     testWritePlink
+    testWriteBimInvalidId
     testWritePlinkCompressed
     testFam2Ind
     testInd2Fam
@@ -172,3 +175,10 @@ testInd2Fam = describe "eigenstratInd2PlinkFam" $ do
         let es = EigenstratIndEntry "SAMPLE0" Female "Pop1"
             fam = PlinkFamEntry "Pop1" "SAMPLE0" "0" "0" Female "Pop1"
         eigenstratInd2PlinkFam PlinkPopNameAsBoth es `shouldBe` fam
+
+testWriteBimInvalidId :: Spec
+testWriteBimInvalidId = describe "writeBim" $
+    it "should throw on SNP IDs with whitespace" $ do
+        let badSnps = [EigenstratSnpEntry (Chrom "11") 0 0.0 "rs0000" 'A' 'C', EigenstratSnpEntry (Chrom "11") 100000 0.001 "rs 1111" 'A' 'G']
+        runSafeT (runEffect (each badSnps >-> writeBim "/tmp/invalidIdTest.bim")) `shouldThrow`
+            (\(SeqFormatException msg) -> "invalid SNP ID \"rs 1111\" at 11:100000" `isPrefixOf` msg)

@@ -1,5 +1,5 @@
 # Changelog
-- V 1.12.0.0: Fixed reading of multi-member gzip files, such as BGZF-compressed VCFs written by bgzip, bcftools or GATK. Previously only the first gzip member was read, leading to parsing errors or silently truncated data. Breaking change: `vcfToFreqSumEntry` now returns `Maybe FreqSumEntry`, with `Nothing` for indels, multi-allelic sites and non-nucleotide alleles (instead of throwing an exception at the first indel). It also replaces missing SNP IDs by `Chrom_Pos`, so that downstream Eigenstrat output never contains empty SNP IDs.
+- V 1.12.0.0: Fixed reading of multi-member gzip files, such as BGZF-compressed VCFs written by bgzip, bcftools or GATK. Previously only the first gzip member was read, leading to parsing errors or silently truncated data. Breaking change: `vcfToFreqSumEntry` now returns `Maybe FreqSumEntry`, with `Nothing` for indels, multi-allelic sites and non-nucleotide alleles (instead of throwing an exception at the first indel). Writing Eigenstrat SNP and Plink BIM files now throws an exception on empty SNP IDs or IDs containing whitespace, as these cannot be read back. Clients converting from VCF or FreqSum need to provide IDs for sites without one (e.g. `Chrom_Pos`).
 - V 1.11.0.4: improved parsing error messages.
 - V 1.11.0.3: added dots to allowed characters in Plink files
 - V 1.11.0.2: exposed parseSex from Eigenstrat
