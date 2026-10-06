@@ -10,6 +10,7 @@ module SequenceFormats.Utils (liftParsingErrors,
 
 import           Control.Error                    (readErr)
 import           Control.Exception                (Exception, throw, throwIO)
+import           Control.Monad                    (unless)
 import           Control.Monad.Catch              (MonadThrow, throwM)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
 import           Control.Monad.Trans.Class        (lift)
@@ -19,10 +20,9 @@ import           Data.Char                        (isSpace)
 import           Data.List                        (isSuffixOf)
 import qualified Data.Streaming.Zlib              as Z
 import           Pipes                            (Consumer, Producer, await,
-                                                   next)
+                                                   next, yield)
 import           Pipes.Attoparsec                 (ParsingError (..), parsed)
 import qualified Pipes.ByteString                 as PB
-import           Pipes.GZip                       (decompress')
 import qualified Pipes.Safe                       as PS
 import qualified Pipes.Safe.Prelude               as PS
 import           System.IO                        (Handle, IOMode (..))
@@ -87,14 +87,55 @@ readFileProd f = PS.withFile f ReadMode PB.fromHandle
 
 readFileProdCheckCompress :: (PS.MonadSafe m) => FilePath -> Producer B.ByteString m ()
 readFileProdCheckCompress f =
-    let decompressFunc = if ".gz" `isSuffixOf` f then decompressMultiMember else id
+    let decompressFunc = if ".gz" `isSuffixOf` f then decompressGzip ("gzip file " ++ f) else id
     in  decompressFunc $ PS.withFile f ReadMode PB.fromHandle
 
 -- |Decompresses a gzip stream that may consist of multiple concatenated gzip members, as is the
 -- case for BGZF files written by bgzip, bcftools or GATK. Pipes.GZip.decompress on its own stops
--- after the first member and silently drops the rest of the input.
+-- after the first member and silently drops the rest of the input. Throws a SeqFormatException
+-- if the input is not valid gzip data, or if it ends in the middle of a gzip member (e.g. a
+-- truncated file), which Pipes.GZip.decompress would silently accept.
 decompressMultiMember :: (MonadIO m) => Producer B.ByteString m r -> Producer B.ByteString m r
-decompressMultiMember prod = decompress' prod >>= either decompressMultiMember return
+decompressMultiMember = decompressGzip "gzip stream"
+
+-- |Like decompressMultiMember, but takes a description of the input (e.g. the file name) for
+-- error messages.
+decompressGzip :: (MonadIO m) => String -> Producer B.ByteString m r -> Producer B.ByteString m r
+decompressGzip descr = newMember True
+  where
+    newMember isFirst prod = liftIO (Z.initInflate (Z.WindowBits 31)) >>= go isFirst False prod
+    -- hasInput tracks whether the current member has received any bytes yet, so that we can
+    -- tell a clean end of input (after a completed member) from a truncated member.
+    go isFirst hasInput prod inf = do
+        res <- lift (next prod)
+        case res of
+            Left r -> do
+                complete <- liftIO (Z.isCompleteInflate inf)
+                if complete || (not hasInput && not isFirst) then return r else
+                    liftIO . throwIO . SeqFormatException $ if hasInput
+                        then descr ++ " ended unexpectedly. The file seems to be truncated"
+                        else descr ++ " is empty, which is not valid gzip"
+            Right (bs, prod')
+                | B.null bs -> go isFirst hasInput prod' inf
+                | otherwise -> do
+                    popper <- liftIO (Z.feedInflate inf bs)
+                    yieldPopper popper
+                    rest <- liftIO (Z.flushInflate inf)
+                    unless (B.null rest) (yield rest)
+                    complete <- liftIO (Z.isCompleteInflate inf)
+                    if complete then do
+                        leftover <- liftIO (Z.getUnusedInflate inf)
+                        newMember False (yield leftover >> prod')
+                    else
+                        go isFirst True prod' inf
+    yieldPopper popper = do
+        popRes <- liftIO popper
+        case popRes of
+            Z.PRDone -> return ()
+            Z.PRNext bs -> yield bs >> yieldPopper popper
+            Z.PRError (Z.ZlibException code) -> liftIO . throwIO . SeqFormatException $
+                "could not decompress " ++ descr ++ " (zlib error code " ++ show code ++
+                    "). The file seems to be corrupt or not gzip-compressed"
 
 word :: A.Parser B.ByteString
 word = A.takeTill isSpace

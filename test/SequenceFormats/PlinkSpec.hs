@@ -16,7 +16,7 @@ import           SequenceFormats.Utils      (Chrom (..),
 
 import           Control.Foldl              (list, purely)
 import           Control.Monad.IO.Class     (liftIO)
-import           Data.List                  (isPrefixOf)
+import           Data.List                  (isInfixOf, isPrefixOf)
 import           Data.Vector                (fromList)
 import           Pipes                      (each, runEffect, (>->))
 import qualified Pipes.Prelude              as P
@@ -30,6 +30,7 @@ spec = do
     testReadFamFile
     testReadBedFile
     testReadBedFileCompressed
+    testReadBedFileInvalid
     testReadPlink
     testWritePlink
     testWriteBimInvalidId
@@ -99,6 +100,26 @@ testReadBedFileCompressed = describe "readBedFile with gzip" $
             bedProd <- readPlinkBedFile fn 5
             purely P.fold list bedProd
         bedDat `shouldBe` mockDatPlinkBed
+
+testReadBedFileInvalid :: Spec
+testReadBedFileInvalid = describe "readBedFile with invalid files" $ do
+    let readBed fn = runSafeT $ readPlinkBedFile fn 5 >>= P.length
+        throwsWith substr (SeqFormatException msg) = substr `isInfixOf` msg
+    it "should report a file too short for the header" $
+        readBed "testDat/example.short.plink.bed" `shouldThrow`
+            throwsWith "is too short (2 bytes) to contain the 3-byte bed header"
+    it "should report wrong magic bytes" $
+        readBed "testDat/example.wrongmagic.plink.bed" `shouldThrow`
+            throwsWith "does not start with the magic bytes 0x6c 0x1b (found 0x74 0x68)"
+    it "should report a gzipped file without .gz ending" $
+        readBed "testDat/example.gzipped.plink.bed" `shouldThrow`
+            throwsWith "It looks gzip-compressed, but its name does not end in .gz"
+    it "should report an incomplete SNP record" $
+        readBed "testDat/example.truncated.plink.bed" `shouldThrow`
+            throwsWith "ends with an incomplete SNP record (1 bytes left over, but each SNP takes 2 bytes for 5 individuals)"
+    it "should report a truncated gzip file" $
+        readBed "testDat/example.truncated.plink.bed.gz" `shouldThrow`
+            throwsWith "gzip file testDat/example.truncated.plink.bed.gz ended unexpectedly"
 
 testReadPlink :: Spec
 testReadPlink = describe "readPlink" $ do

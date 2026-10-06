@@ -53,3 +53,13 @@ testDecompressMultiMember = describe "decompressMultiMember" $ do
         let (a, b) = B.splitAt 25 (B.concat members)
         out <- P.fold (<>) B.empty id (decompressMultiMember (each [a, b]))
         out `shouldBe` expected
+    it "throws on input that is not gzip-compressed" $
+        P.fold (<>) B.empty id (decompressMultiMember (yield "this is not gzip\n")) `shouldThrow`
+            (== SeqFormatException "could not decompress gzip stream (zlib error code -3). The file seems to be corrupt or not gzip-compressed")
+    it "throws on a truncated gzip member" $ do
+        let truncated = B.take (B.length (B.concat members) - 5) (B.concat members)
+        P.fold (<>) B.empty id (decompressMultiMember (yield truncated)) `shouldThrow`
+            (== SeqFormatException "gzip stream ended unexpectedly. The file seems to be truncated")
+    it "throws on empty input" $
+        P.fold (<>) B.empty id (decompressMultiMember (yield B.empty)) `shouldThrow`
+            (== SeqFormatException "gzip stream is empty, which is not valid gzip")

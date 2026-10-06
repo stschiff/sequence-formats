@@ -29,7 +29,6 @@ import           Control.Monad                    (forM_, void, when)
 import           Control.Monad.Catch              (MonadThrow, throwM)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
 import           Control.Monad.Trans.Class        (lift)
-import           Control.Monad.Trans.State.Strict (runStateT)
 import qualified Data.Attoparsec.ByteString       as AB
 import qualified Data.Attoparsec.ByteString.Char8 as A
 import           Data.Bits                        (shiftL, shiftR, (.&.), (.|.))
@@ -41,13 +40,15 @@ import qualified Data.Streaming.Zlib              as Z
 import           Data.Vector                      (fromList, toList)
 import           Data.Word                        (Word8)
 import           Pipes                            (Consumer, Producer, (>->))
-import           Pipes.Attoparsec                 (ParsingError (..), parse)
+import           Lens.Family2                     (view)
+import           Pipes.Attoparsec                 (parsed)
 import qualified Pipes.ByteString                 as PB
 import qualified Pipes.Prelude                    as P
 import           Pipes.Safe                       (MonadSafe, register)
 import qualified Pipes.Safe.Prelude               as PS
 import           System.IO                        (IOMode (..),
                                                    withFile)
+import           Text.Printf                      (printf)
 
 -- see https://www.cog-genomics.org/plink/2.0/formats#fam
 data PlinkFamEntry = PlinkFamEntry {
@@ -116,16 +117,33 @@ eigenstratInd2PlinkFam plinkPopNameMode (EigenstratIndEntry indId sex popName)=
         PlinkPopNameAsPhenotype -> PlinkFamEntry "DummyFamily" indId "0" "0" sex popName
         PlinkPopNameAsBoth      -> PlinkFamEntry popName indId "0" "0" sex popName
 
-bedHeaderParser :: AB.Parser ()
-bedHeaderParser = do
-    void $ AB.word8 0b01101100 -- magic number I for BED files
-    void $ AB.word8 0b00011011 -- magic number II for BED files
-    void $ AB.word8 0b00000001 -- we can only parse SNP-major order
+-- |Checks the three magic bytes at the start of a bed file, see
+-- https://www.cog-genomics.org/plink/1.9/formats#bed
+checkBedHeader :: (MonadThrow m) => FilePath -> B.ByteString -> m ()
+checkBedHeader file header
+    | BB.length header < 3 = throwM . SeqFormatException $
+        "Plink bed file " ++ file ++ " is too short (" ++ show (BB.length header) ++
+        " bytes) to contain the 3-byte bed header. The file seems to be empty or truncated"
+    | BB.take 2 header /= BB.pack [0b01101100, 0b00011011] = throwM . SeqFormatException $
+        "Plink bed file " ++ file ++ " does not start with the magic bytes 0x6c 0x1b (found " ++
+        showBytes (BB.take 2 header) ++ "). It does not seem to be a Plink bed file" ++ gzipHint
+    | BB.index header 2 /= 0b00000001 = throwM . SeqFormatException $
+        "Plink bed file " ++ file ++ " is not in SNP-major mode (third byte is " ++
+        showBytes (BB.drop 2 header) ++ " instead of 0x01). Only SNP-major bed files are supported"
+    | otherwise = return ()
+  where
+    showBytes = unwords . map (\b -> printf "0x%02x" b) . BB.unpack
+    gzipHint = if BB.take 2 header == BB.pack [0x1f, 0x8b] && not (".gz" `isSuffixOf` file)
+        then ". It looks gzip-compressed, but its name does not end in .gz"
+        else ""
+
+-- |The number of bytes per SNP in a bed file, with 2 bits per individual.
+bedRecordBytes :: Int -> Int
+bedRecordBytes nrInds = (nrInds + 3) `quot` 4
 
 bedGenotypeParser :: Int -> AB.Parser GenoLine
 bedGenotypeParser nrInds = do
-    let nrBytes = if nrInds `rem` 4 == 0 then nrInds `quot` 4 else (nrInds `quot` 4) + 1
-    bytes <- BB.unpack <$> AB.take nrBytes
+    bytes <- BB.unpack <$> AB.take (bedRecordBytes nrInds)
     let indBitPairs = concatMap getBitPairs bytes
     return . fromList . take nrInds . map bitPairToGenotype $ indBitPairs
   where
@@ -136,18 +154,23 @@ bedGenotypeParser nrInds = do
     bitPairToGenotype 0b00000001 = Missing
     bitPairToGenotype _          = error "This should never happen"
 
-readPlinkBedProd :: (MonadThrow m) => Int -> Producer B.ByteString m () -> m (Producer GenoLine m ())
-readPlinkBedProd nrInds prod = do
-    (res, rest) <- runStateT (parse bedHeaderParser) prod
-    _ <- case res of
-        Nothing -> throwM $ ParsingError [] "Bed file exhausted prematurely"
-        Just (Left e) -> throwM e
-        Just (Right h) -> return h
-    return $ consumeProducer (bedGenotypeParser nrInds) rest
+readPlinkBedProd :: (MonadThrow m) => FilePath -> Int -> Producer B.ByteString m () -> m (Producer GenoLine m ())
+readPlinkBedProd file nrInds prod = do
+    (headerChunks, rest) <- P.toListM' $ view (PB.splitAt (3 :: Int)) prod
+    checkBedHeader file (BB.concat headerChunks)
+    return $ parsed (bedGenotypeParser nrInds) rest >>= either reportTruncated return
+  where
+    -- the genotype parser can only fail if the input ends in the middle of a SNP record
+    reportTruncated (_, leftovers) = do
+        nrLeftoverBytes <- lift $ P.fold (\n c -> n + BB.length c) 0 id leftovers
+        throwM . SeqFormatException $ "Plink bed file " ++ file ++ " ends with an incomplete SNP " ++
+            "record (" ++ show nrLeftoverBytes ++ " bytes left over, but each SNP takes " ++
+            show (bedRecordBytes nrInds) ++ " bytes for " ++ show nrInds ++ " individuals). " ++
+            "Either the bed file is truncated or it does not match the number of individuals in the fam file"
 
 -- |A function to read a bed file from a file. Returns a Producer over all lines.
 readPlinkBedFile :: (MonadSafe m) => FilePath -> Int -> m (Producer GenoLine m ())
-readPlinkBedFile file nrInds = readPlinkBedProd nrInds . readFileProdCheckCompress $ file
+readPlinkBedFile file nrInds = readPlinkBedProd file nrInds . readFileProdCheckCompress $ file
 
 -- |Function to read a Bim File from StdIn. Returns a Pipes-Producer over the EigenstratSnpEntries.
 readBimStdIn :: (MonadThrow m, MonadIO m) => Producer EigenstratSnpEntry m ()
