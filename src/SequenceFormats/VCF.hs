@@ -119,7 +119,7 @@ vcfEntryParser = vcfEntryParserFull <|> vcfEntryParserTruncated
     parseFilter = (parseDot *> pure Nothing) <|> (Just <$> word)
     parseInfoFields = (parseDot *> pure []) <|> (parseInfoField `A.sepBy1` A.char ';')
     parseInfoField = A.takeTill (\c -> c == ';' || c == '\t')
-    parseFormatStringsAndGenotypes = (\f g -> Just (f, g)) <$> parseFormatStrings <* sp <*> parseGenotypeInfos 
+    parseFormatStringsAndGenotypes = (\f g -> Just (f, g)) <$> parseFormatStrings <* sp <*> parseGenotypeInfos
     parseFormatStrings = parseFormatString `A.sepBy1` A.char ':'
     parseFormatString = A.takeTill (\c -> c == ':' || c == '\t')
     parseGenotypeInfos = parseGenotype `A.sepBy1` sp
@@ -176,7 +176,7 @@ getDosages vcfEntry = do
 
 -- |Converts a VCFentry to the simpler FreqSum format. Returns Nothing for sites that cannot be represented
 -- as a biallelic SNP: indels and other multi-base alleles, multi-allelic sites and non-nucleotide alleles such
--- as the spanning deletion allele @*@. Sites without an alternative allele are kept, with alternative allele @N@.
+-- as the spanning deletion allele *. Sites without an alternative allele are kept, with alternative allele N.
 vcfToFreqSumEntry :: (MonadThrow m) => VCFentry -> m (Maybe FreqSumEntry)
 vcfToFreqSumEntry vcfEntry = case (vcfRef vcfEntry, vcfAlt vcfEntry) of
     (ref, [])    | isSingleBase ref                    -> Just <$> makeEntry (B.head ref) 'N'
