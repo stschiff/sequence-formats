@@ -16,14 +16,16 @@ import           SequenceFormats.Eigenstrat       (EigenstratIndEntry (..),
                                                    EigenstratSnpEntry (..),
                                                    GenoEntry (..), GenoLine,
                                                    Sex (..))
-import           SequenceFormats.Utils            (Chrom (..), consumeProducer,
+import           SequenceFormats.Utils            (Chrom (..),
+                                                   SeqFormatException (..),
+                                                   consumeProducer,
                                                    deflateFinaliser,
                                                    gzipConsumer,
                                                    readFileProdCheckCompress,
                                                    word, writeFromPopper)
 
 import           Control.Applicative              ((<|>))
-import           Control.Monad                    (forM_, void)
+import           Control.Monad                    (forM_, void, when)
 import           Control.Monad.Catch              (MonadThrow, throwM)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
 import           Control.Monad.Trans.Class        (lift)
@@ -33,6 +35,7 @@ import qualified Data.Attoparsec.ByteString.Char8 as A
 import           Data.Bits                        (shiftL, shiftR, (.&.), (.|.))
 import qualified Data.ByteString                  as BB
 import qualified Data.ByteString.Char8            as B
+import           Data.Char                        (isSpace)
 import           Data.List                        (isSuffixOf)
 import qualified Data.Streaming.Zlib              as Z
 import           Data.Vector                      (fromList, toList)
@@ -183,10 +186,13 @@ writeBim bimFile = do
             return $ gzipConsumer def bimFileH
         else
             return $ PB.toHandle bimFileH
-    let toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt) ->
+    let toTextPipe = P.mapM (\(EigenstratSnpEntry chrom pos gpos gid ref alt) -> do
+            when (B.null gid || B.any isSpace gid) . throwM . SeqFormatException $
+                "invalid SNP ID " ++ show gid ++ " at " ++ show chrom ++ ":" ++ show pos ++
+                ". SNP IDs must be non-empty and must not contain whitespace"
             let bimLine = B.intercalate "\t" [unChrom chrom, gid, B.pack (show gpos),
                     B.pack (show pos), B.singleton ref, B.singleton alt]
-            in  bimLine <> "\n")
+            return $ bimLine <> "\n")
     toTextPipe >-> bimOutTextConsumer
 
 -- |Function to write a Plink Fam file.

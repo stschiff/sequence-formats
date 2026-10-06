@@ -3,6 +3,7 @@ module SequenceFormats.EigenstratSpec where
 
 import           Control.Foldl              (list, purely)
 import           Control.Monad.IO.Class     (liftIO)
+import           Data.List                  (isPrefixOf)
 import           Data.Vector                (fromList)
 import           Pipes                      (each, runEffect, (>->))
 import qualified Pipes.Prelude              as P
@@ -10,8 +11,10 @@ import           Pipes.Safe                 (runSafeT)
 import           SequenceFormats.Eigenstrat (EigenstratIndEntry (..),
                                              EigenstratSnpEntry (..),
                                              GenoEntry (..), GenoLine, Sex (..),
-                                             readEigenstrat, writeEigenstrat)
-import           SequenceFormats.Utils      (Chrom (..))
+                                             readEigenstrat, writeEigenstrat,
+                                             writeEigenstratSnp)
+import           SequenceFormats.Utils      (Chrom (..),
+                                             SeqFormatException (..))
 import           Test.Hspec
 
 spec :: Spec
@@ -20,6 +23,7 @@ spec = do
     testReadEigenstratCompressed
     testWriteEigenstrat
     testWriteEigenstratCompressed
+    testWriteEigenstratSnpInvalidId
 
 mockDatEigenstratSnp :: [EigenstratSnpEntry]
 mockDatEigenstratSnp = [
@@ -107,3 +111,10 @@ testWriteEigenstratCompressed = describe "writeEigenstrat with gzip" $ do
         snpGenoEntries <- liftIO . runSafeT $ purely P.fold list esProd
         (map fst snpGenoEntries) `shouldBe` mockDatEigenstratSnp
         (map snd snpGenoEntries) `shouldBe` mockDatEigenstratGeno
+
+testWriteEigenstratSnpInvalidId :: Spec
+testWriteEigenstratSnpInvalidId = describe "writeEigenstratSnp" $
+    it "should throw on empty SNP IDs" $ do
+        let badSnps = [EigenstratSnpEntry (Chrom "11") 0 0.0 "rs0000" 'A' 'C', EigenstratSnpEntry (Chrom "11") 100000 0.001 "" 'A' 'G']
+        runSafeT (runEffect (each badSnps >-> writeEigenstratSnp "/tmp/invalidIdTest.snp")) `shouldThrow`
+            (\(SeqFormatException msg) -> "invalid SNP ID \"\" at 11:100000" `isPrefixOf` msg)

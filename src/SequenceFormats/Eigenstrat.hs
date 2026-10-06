@@ -20,12 +20,13 @@ import           SequenceFormats.Utils            (Chrom (..),
 
 import           Control.Applicative              ((<|>))
 import           Control.Exception                (throw)
-import           Control.Monad                    (forM_, void)
-import           Control.Monad.Catch              (MonadThrow)
+import           Control.Monad                    (forM_, void, when)
+import           Control.Monad.Catch              (MonadThrow, throwM)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
 import           Control.Monad.Trans.Class        (lift)
 import qualified Data.Attoparsec.ByteString.Char8 as A
 import qualified Data.ByteString.Char8            as B
+import           Data.Char                        (isSpace)
 import           Data.List                        (isSuffixOf)
 import qualified Data.Streaming.Zlib              as Z
 import           Data.Vector                      (Vector, fromList, toList)
@@ -177,10 +178,13 @@ writeEigenstratSnp snpFile = do
             return $ gzipConsumer def snpFileH
         else
             return $ PB.toHandle snpFileH
-    let toTextPipe = P.map (\(EigenstratSnpEntry chrom pos gpos gid ref alt) ->
+    let toTextPipe = P.mapM (\(EigenstratSnpEntry chrom pos gpos gid ref alt) -> do
+            when (B.null gid || B.any isSpace gid) . throwM . SeqFormatException $
+                "invalid SNP ID " ++ show gid ++ " at " ++ show chrom ++ ":" ++ show pos ++
+                ". SNP IDs must be non-empty and must not contain whitespace"
             let snpLine = B.intercalate "\t" [gid, unChrom chrom, B.pack (show gpos),
                     B.pack (show pos), B.singleton ref, B.singleton alt]
-            in  snpLine <> "\n")
+            return $ snpLine <> "\n")
     toTextPipe >-> snpOutTextConsumer
 
 -- |Function to write an Eigentrat Geno File. Returns a consumer expecting Eigenstrat Genolines.
